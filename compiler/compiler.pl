@@ -173,10 +173,10 @@ meta_const('$mem',  65535).  %% MEMORY_SIZE
 meta_const('$cell', 2).     %% CELL_SIZE
 meta_const('$stack-size', 256).
 meta_const('$ds-start', DS) :- DS is 65535 - (256 * 2 * 2).
-meta_const('$rs-start', RS) :- DS is 65535 - (256 * 2 * 2), RS is DS + (256 * 2).
-meta_const('$vm-sp', A)  :- DS is 65535 - (256 * 2 * 2), A is DS - 6.
-meta_const('$vm-rp', A)  :- DS is 65535 - (256 * 2 * 2), A is DS - 4.
-meta_const('$vm-ip', A)  :- DS is 65535 - (256 * 2 * 2), A is DS - 2.
+meta_const('$rs-start', RS) :- meta_const('$ds-start', DS), RS is DS + (256 * 2).
+meta_const('$vm-sp', A)  :- meta_const('$ds-start', DS), A is DS - 6.
+meta_const('$vm-rp', A)  :- meta_const('$ds-start', DS), A is DS - 4.
+meta_const('$vm-ip', A)  :- meta_const('$ds-start', DS), A is DS - 2.
 
 %% expand_metas(+Forms, -Expanded, -FinalPtr)
 %% Process top-level forms, expanding $-prefixed meta directives.
