@@ -318,14 +318,11 @@ format_typecheck_errors([type_mismatch(const, Name, Type)|Rest], DefLines) :-
     format_typecheck_errors(Rest, DefLines).
 format_typecheck_errors([type_error(Expr)|Rest], DefLines) :-
     ansi_red("error:", ErrTag),
-    append(ErrTag, " type error in expression: ", Msg),
+    append(ErrTag, " type error in expression: ", P1),
+    with_output_to(chars(ExprCs), write(Expr)),
+    append(P1, ExprCs, P2),
+    append(P2, "\n", Msg),
     write_stderr(Msg),
-    current_output(StdOut),
-    open('/dev/stderr', write, Err),
-    set_output(Err),
-    write(Expr), nl,
-    set_output(StdOut),
-    close(Err),
     format_typecheck_errors(Rest, DefLines).
 format_typecheck_errors([_|Rest], DefLines) :-
     format_typecheck_errors(Rest, DefLines).
