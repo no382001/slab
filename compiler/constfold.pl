@@ -181,3 +181,39 @@ eval_binop(>=, A, B, R) :- ( A >= B -> R = 1 ; R = 0 ).
 eval_binop(and, A, B, R) :- R is A /\ B.
 eval_binop(or, A, B, R) :- R is A \/ B.
 eval_binop(xor, A, B, R) :- R is (A \/ B) /\ (\(A /\ B)).
+
+%% ============================================================
+%% tests
+%% ============================================================
+
+:- use_module(parser).
+:- use_module(ast).
+:- use_module(typecheck).
+:- use_module(effects).
+
+fold_pipeline(Src, FoldedDefs) :-
+    parse(Src, ok(Forms)),
+    transform_program(Forms, ok(Defs)),
+    check_program(Defs, ok(_)),
+    infer_effects(Defs, EffEnv),
+    fold_constants(Defs, EffEnv, FoldedDefs).
+
+%% * folds: f(x) = x*3, call f(7) -> num(21)
+?- fold_pipeline("(def f ((x : int)) : int (* x 3)) (def g () : int (f 7))", Defs),
+   member(def(g, _, _, _, [num(21)]), Defs).
+   true.
+
+%% / folds: f(x) = x/4, call f(20) -> num(5)
+?- fold_pipeline("(def f ((x : int)) : int (/ x 4)) (def g () : int (f 20))", Defs),
+   member(def(g, _, _, _, [num(5)]), Defs).
+   true.
+
+%% mod folds: f(x) = x mod 7, call f(23) -> num(2)
+?- fold_pipeline("(def f ((x : int)) : int (mod x 7)) (def g () : int (f 23))", Defs),
+   member(def(g, _, _, _, [num(2)]), Defs).
+   true.
+
+%% division by zero must not fold (guard keeps call intact)
+?- fold_pipeline("(def f ((x : int)) : int (/ x 0)) (def g () : int (f 10))", Defs),
+   member(def(g, _, _, _, [call(f, [num(10)])]), Defs).
+   true.
