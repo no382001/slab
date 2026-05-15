@@ -17,8 +17,11 @@
 ($alloc BUF 256)
 
 ;; ---- heap ----
+;; HEAP marks the runtime heap base. A padding alloc follows so the compiler's
+;; scratch region (which starts at FinalPtr) stays above the heap data area.
 ($section 35000)
 ($alloc HEAP 0)
+($alloc scratch-fence 256)
 
 ;; ============================================================
 ;; string utilities

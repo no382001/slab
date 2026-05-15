@@ -167,110 +167,196 @@ inline auto h_trap(vm &v) -> void {
   }
 }
 
-const std::array<op_info, OP_COUNT> dispatch = {{
-    {NOP, "nop", 0, 0, 0, 0, h_nop},
-    {LIT, "lit", 0, 1, 0, 0, h_lit},
-    {LOAD, "@", 1, 1, 0, 0, h_load},
-    {STORE, "!", 2, 0, 0, 0, h_store},
-    {LOADB, "c@", 1, 1, 0, 0, h_loadb},
-    {STOREB, "c!", 2, 0, 0, 0, h_storeb},
-    {DROP, "drop", 1, 0, 0, 0, h_drop},
-    {DUP, "dup", 1, 2, 0, 0, h_dup},
-    {SWAP, "swap", 2, 2, 0, 0, h_swap},
-    {OVER, "over", 2, 3, 0, 0, h_over},
-    {TOR, ">r", 1, 0, 0, 1, h_tor},
-    {FROMR, "r>", 0, 1, 1, 0, h_fromr},
-    {RFETCH, "r@", 0, 1, 1, 1, h_rfetch},
-    {ADD, "+", 2, 1, 0, 0, h_add},
-    {SUB, "-", 2, 1, 0, 0, h_sub},
-    {MUL, "*", 2, 1, 0, 0, h_mul},
-    {DIV, "/", 2, 1, 0, 0, h_div},
-    {MOD, "mod", 2, 1, 0, 0, h_mod},
-    {AND, "and", 2, 1, 0, 0, h_and},
-    {OR, "or", 2, 1, 0, 0, h_or},
-    {XOR, "xor", 2, 1, 0, 0, h_xor},
-    {EQ, "=", 2, 1, 0, 0, h_eq},
-    {LT, "<", 2, 1, 0, 0, h_lt},
-    {BRANCH, "branch", 0, 0, 0, 0, h_branch},
-    {ZBRANCH, "zbranch", 1, 0, 0, 0, h_zbranch},
-    {CALL, "call", 0, 0, 0, 1, h_call},
-    {RET, "ret", 0, 0, 1, 0, h_ret},
-    {EXECUTE, "execute", 1, 0, 0, 1, h_execute},
-    {TRAP, "trap", 1, 0, 0, 0, h_trap}, // pops trap number from stack
+constexpr std::array<op_info, OP_COUNT> dispatch = {{
+    {NOP, "nop", 0, 0, 0, 0},
+    {LIT, "lit", 0, 1, 0, 0},
+    {LOAD, "@", 1, 1, 0, 0},
+    {STORE, "!", 2, 0, 0, 0},
+    {LOADB, "c@", 1, 1, 0, 0},
+    {STOREB, "c!", 2, 0, 0, 0},
+    {DROP, "drop", 1, 0, 0, 0},
+    {DUP, "dup", 1, 2, 0, 0},
+    {SWAP, "swap", 2, 2, 0, 0},
+    {OVER, "over", 2, 3, 0, 0},
+    {TOR, ">r", 1, 0, 0, 1},
+    {FROMR, "r>", 0, 1, 1, 0},
+    {RFETCH, "r@", 0, 1, 1, 1},
+    {ADD, "+", 2, 1, 0, 0},
+    {SUB, "-", 2, 1, 0, 0},
+    {MUL, "*", 2, 1, 0, 0},
+    {DIV, "/", 2, 1, 0, 0},
+    {MOD, "mod", 2, 1, 0, 0},
+    {AND, "and", 2, 1, 0, 0},
+    {OR, "or", 2, 1, 0, 0},
+    {XOR, "xor", 2, 1, 0, 0},
+    {EQ, "=", 2, 1, 0, 0},
+    {LT, "<", 2, 1, 0, 0},
+    {BRANCH, "branch", 0, 0, 0, 0},
+    {ZBRANCH, "zbranch", 1, 0, 0, 0},
+    {CALL, "call", 0, 0, 0, 1},
+    {RET, "ret", 0, 0, 1, 0},
+    {EXECUTE, "execute", 1, 0, 0, 1},
+    {TRAP, "trap", 1, 0, 0, 0},
 }};
 
-auto step(vm &v) -> void {
-  if (v.ip() >= MEMORY_SIZE) {
-    std::fprintf(stderr, "error: ip out of bounds (ip=%u, max=%zu)\n", v.ip(),
-                 MEMORY_SIZE - 1);
-    exit(1);
-    return;
-  }
-
-  auto prev_ip = v.ip();
-  auto opcode = static_cast<uint8_t>(fetch_cell(v));
-
-  if (opcode >= OP_COUNT) {
-    std::fprintf(stderr, "error: invalid opcode %d at ip=%u\n", opcode,
-                 prev_ip);
-    exit(1);
-    return;
-  }
-
-  const auto &info = dispatch[opcode];
-
-  if (v.debug) {
-    std::fprintf(v.trace_out, "%04x\t%s", prev_ip, info.name.data());
-
-    // peek at operand for instructions that have one
-    switch (opcode) {
-    case LIT:
-    case TRAP:
-      std::fprintf(v.trace_out, "\t%d", read_cell(v, v.ip()));
-      break;
-    case BRANCH:
-    case ZBRANCH:
-    case CALL:
-      std::fprintf(v.trace_out, "\t->%04x",
-                   static_cast<ucell_t>(read_cell(v, v.ip())));
-      break;
-    default:
-      break;
-    }
-
-    // print stack
-    std::fprintf(v.trace_out, "\t[");
-    for (ucell_t i = 0; i < v.sp(); ++i) {
-      std::fprintf(v.trace_out, "%d", v.ds(i));
-      if (i < v.sp() - 1)
-        std::fprintf(v.trace_out, " ");
-    }
-    std::fprintf(v.trace_out, "]\n");
-  }
-
-  if (v.sp() < info.in) {
-    std::fprintf(stderr,
-                 "error: stack underflow at ip=%u (%s needs %d, sp=%u)\n",
-                 prev_ip, info.name.data(), info.in, v.sp());
-    exit(1);
-    return;
-  }
-
-  if (v.rp() < info.rin) {
-    std::fprintf(
-        stderr, "error: return stack underflow at ip=%u (%s needs %d, rp=%u)\n",
-        prev_ip, info.name.data(), info.rin, v.rp());
-    exit(1);
-    return;
-  }
-
-  info.fn(v);
-}
+static_assert(dispatch[STORE].code == STORE, "dispatch table out of order");
 
 auto run(vm &v) -> void {
-  while (v.running) {
-    step(v);
-  }
+  static const void *dtable[OP_COUNT] = {
+      &&do_nop,     &&do_lit,  &&do_load, &&do_store,   &&do_loadb, &&do_storeb,
+      &&do_drop,    &&do_dup,  &&do_swap, &&do_over,    &&do_tor,   &&do_fromr,
+      &&do_rfetch,  &&do_add,  &&do_sub,  &&do_mul,     &&do_div,   &&do_mod,
+      &&do_and,     &&do_or,   &&do_xor,  &&do_eq,      &&do_lt,    &&do_branch,
+      &&do_zbranch, &&do_call, &&do_ret,  &&do_execute, &&do_trap,
+  };
+  static_assert(OP_COUNT == 29, "update dtable");
+
+  // fetch next opcode, run checks, return target label
+  auto next = [&]() -> const void * {
+    if (v.ip() >= MEMORY_SIZE) [[unlikely]] {
+      std::fprintf(stderr, "error: ip out of bounds (ip=%u, max=%zu)\n", v.ip(),
+                   MEMORY_SIZE - 1);
+      exit(1);
+    }
+    auto prev_ip = v.ip();
+    auto opcode = static_cast<uint8_t>(fetch_cell(v));
+    if (opcode >= OP_COUNT) [[unlikely]] {
+      std::fprintf(stderr, "error: invalid opcode %d at ip=%u\n", opcode,
+                   prev_ip);
+      exit(1);
+    }
+    const auto &info = dispatch[opcode];
+    if (v.debug) [[unlikely]] {
+      std::fprintf(v.trace_out, "%04x\t%s", prev_ip, info.name.data());
+      switch (opcode) {
+      case LIT:
+      case TRAP:
+        std::fprintf(v.trace_out, "\t%d", read_cell(v, v.ip()));
+        break;
+      case BRANCH:
+      case ZBRANCH:
+      case CALL:
+        std::fprintf(v.trace_out, "\t->%04x",
+                     static_cast<ucell_t>(read_cell(v, v.ip())));
+        break;
+      default:
+        break;
+      }
+      std::fprintf(v.trace_out, "\t[");
+      for (ucell_t i = 0; i < v.sp(); ++i) {
+        std::fprintf(v.trace_out, "%d", v.ds(i));
+        if (i < v.sp() - 1)
+          std::fprintf(v.trace_out, " ");
+      }
+      std::fprintf(v.trace_out, "]\n");
+    }
+    if (v.sp() < info.in) [[unlikely]] {
+      std::fprintf(stderr,
+                   "error: stack underflow at ip=%u (%s needs %d, sp=%u)\n",
+                   prev_ip, info.name.data(), info.in, v.sp());
+      exit(1);
+    }
+    if (v.rp() < info.rin) [[unlikely]] {
+      std::fprintf(
+          stderr,
+          "error: return stack underflow at ip=%u (%s needs %d, rp=%u)\n",
+          prev_ip, info.name.data(), info.rin, v.rp());
+      exit(1);
+    }
+    return dtable[opcode];
+  };
+
+  goto *(next());
+
+do_nop:
+  h_nop(v);
+  goto *(next());
+do_lit:
+  h_lit(v);
+  goto *(next());
+do_load:
+  h_load(v);
+  goto *(next());
+do_store:
+  h_store(v);
+  goto *(next());
+do_loadb:
+  h_loadb(v);
+  goto *(next());
+do_storeb:
+  h_storeb(v);
+  goto *(next());
+do_drop:
+  h_drop(v);
+  goto *(next());
+do_dup:
+  h_dup(v);
+  goto *(next());
+do_swap:
+  h_swap(v);
+  goto *(next());
+do_over:
+  h_over(v);
+  goto *(next());
+do_tor:
+  h_tor(v);
+  goto *(next());
+do_fromr:
+  h_fromr(v);
+  goto *(next());
+do_rfetch:
+  h_rfetch(v);
+  goto *(next());
+do_add:
+  h_add(v);
+  goto *(next());
+do_sub:
+  h_sub(v);
+  goto *(next());
+do_mul:
+  h_mul(v);
+  goto *(next());
+do_div:
+  h_div(v);
+  goto *(next());
+do_mod:
+  h_mod(v);
+  goto *(next());
+do_and:
+  h_and(v);
+  goto *(next());
+do_or:
+  h_or(v);
+  goto *(next());
+do_xor:
+  h_xor(v);
+  goto *(next());
+do_eq:
+  h_eq(v);
+  goto *(next());
+do_lt:
+  h_lt(v);
+  goto *(next());
+do_branch:
+  h_branch(v);
+  goto *(next());
+do_zbranch:
+  h_zbranch(v);
+  goto *(next());
+do_call:
+  h_call(v);
+  goto *(next());
+do_ret:
+  h_ret(v);
+  goto *(next());
+do_execute:
+  h_execute(v);
+  goto *(next());
+do_trap:
+  h_trap(v);
+  if (!v.running)
+    return;
+  goto *(next());
 }
 
 auto init(vm &v) -> void {

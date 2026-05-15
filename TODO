@@ -1,3 +1,13 @@
+- compiler: auto-allocated scratch cells for function params and let-bindings are placed
+  starting at FinalPtr, which is also where $section puts the heap.
+  root cause: expand_metas returns FinalPtr as SlotBase, so scratch cells start at the
+  same address as the heap. in dict.sets, streq's param scratch cells (a@heap, b@heap+2)
+  overwrote the first dict entry on every call. each function consumes (num_params*2 + 16)
+  bytes of scratch, so with N functions the heap must start at least N*18 bytes past
+  SlotBase. workaround: add a dummy ($alloc scratch-fence 256) after ($alloc HEAP 0) to
+  advance FinalPtr past the scratch region without moving HEAP's address (done in dict.sets).
+  fix: SlotBase should derive from the end of the $alloc section only, not from $section
+  heap addresses — scratch cells and heap must be in separate regions.
 - store and store8 should be c@ and c! to avoid confusion
 - with that step i should also reduce the mapping overhead, it should be 1:1
 

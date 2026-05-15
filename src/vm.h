@@ -117,8 +117,6 @@ enum op : uint8_t {
 };
 
 struct vm;
-using handler_fn = void (*)(vm &);
-
 struct op_info {
   op code;
   std::string_view name;
@@ -126,7 +124,6 @@ struct op_info {
   uint8_t out;
   uint8_t rin;
   uint8_t rout;
-  handler_fn fn;
 };
 
 extern const std::array<op_info, OP_COUNT> dispatch;
@@ -153,6 +150,5 @@ auto fetch_cell(vm &v) -> cell_t;
 auto read_cell(vm &v, ucell_t a) -> cell_t;
 auto write_cell(vm &v, ucell_t a, cell_t x) -> void;
 
-auto step(vm &v) -> void;
 auto run(vm &v) -> void;
 auto init(vm &v) -> void;
