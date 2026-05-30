@@ -132,6 +132,16 @@ setup() {
   [[ "$result" == error* ]]
 }
 
+@test "typecheck rejects: while condition not bool" {
+  result="$(compile '(def f ((n : int)) : void (while n (emit 65)))' typed)"
+  [[ "$result" == error* ]]
+}
+
+@test "typecheck rejects: while condition not bool (arithmetic expr)" {
+  result="$(compile '(def f ((n : int)) : void (while (+ n 1) (emit 65)))' typed)"
+  [[ "$result" == error* ]]
+}
+
 @test "compile rejects: no main" {
   result="$(compile '(def f () : int 42)')"
   [[ "$result" == error* ]]

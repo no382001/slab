@@ -317,6 +317,11 @@ format_typecheck_errors([type_mismatch(const, Name, Type)|Rest], DefLines) :-
     append(P5, "\n", Msg),
     write_stderr(Msg),
     format_typecheck_errors(Rest, DefLines).
+format_typecheck_errors([while_cond_not_bool|Rest], DefLines) :-
+    ansi_red("error:", ErrTag),
+    append(ErrTag, " while condition must be bool\n", Msg),
+    write_stderr(Msg),
+    format_typecheck_errors(Rest, DefLines).
 format_typecheck_errors([type_error(Expr)|Rest], DefLines) :-
     ansi_red("error:", ErrTag),
     append(ErrTag, " type error in expression: ", P1),

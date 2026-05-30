@@ -12,7 +12,6 @@ errors / warnings:
 - string literals pushing code region into the $section range
 - deref on a non-ptr type
 - if branches with mismatched types
-- while condition not bool
 - [det] function laundering effects via addr+execute of a [nondet] function
 - extern / const / $alloc declared but never used (warning)
 

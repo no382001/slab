@@ -76,7 +76,9 @@ params_to_env([param(N, T) | Rest], [var(N, T) | Env]) :-
 
 check_body([], _, _, void, _, []).
 check_body([Expr], Env, FEnv, RetType, FName, Errors) :-
-    ( infer(Env, FEnv, Expr, ExprType),
+    ( Expr = while(Cond, _), \+ infer(Env, FEnv, Cond, bool) ->
+        Errors = [while_cond_not_bool]
+    ; infer(Env, FEnv, Expr, ExprType),
       types_compatible(RetType, ExprType) ->
         Errors = []
     ;
@@ -96,6 +98,9 @@ check_expr_for_side_effects(Env, FEnv, Expr, Errors, NewEnv) :-
         check_let_body(LetBody, ExtEnv, FEnv, LetBodyErrors),
         append(BindErrors, LetBodyErrors, Errors),
         NewEnv = Env  % let doesn't leak scope
+    ; Expr = while(Cond, _), \+ infer(Env, FEnv, Cond, bool) ->
+        Errors = [while_cond_not_bool],
+        NewEnv = Env
     ; infer(Env, FEnv, Expr, _) ->
         Errors = [],
         NewEnv = Env
