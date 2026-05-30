@@ -3,23 +3,22 @@
 ;; ---- catch frame stack ----
 ;; Each frame: saved_RP (2 bytes) + saved_DSP (2 bytes) = 4 bytes
 ;; 8 frames max = 32 bytes
-($alloc THROWN  2)    ; error code from throw (0 = none)
-($alloc CF_SP   2)    ; catch frame stack pointer (byte offset)
-($alloc CF_BASE 32)   ; catch frame stack (8 frames)
+($alloc THROWN   2)    ; error code from throw (0 = none)
+($alloc CF_SP    2)    ; catch frame stack pointer (byte offset)
+($alloc CF_BASE 32)    ; catch frame stack (8 frames)
+($alloc THROW_RP 2)    ; temp: target RP saved before let cleanup in f_throw
 
 (def catch_init () : void [semidet]
   (store CF_SP 0)
   (store THROWN 0))
 
 ;; push a catch frame — saves VM RP and Forth DSP
-;; We save RP-1 (skipping catch_push's own return addr slot) so that
-;; when throw restores RP and RETs, it pops the *caller's* return addr,
-;; effectively returning from the function that called catch_push.
+;; Save RP-1 (skipping catch_push's own return addr) so that when throw
+;; restores RP and RETs it pops the *caller's* return addr.
 (def catch_push () : void [semidet]
-  (let ((off (deref CF_SP)))
-    (store (+ CF_BASE off) (- (deref VM_RP) 1))
-    (store (+ CF_BASE (+ off 2)) (deref DSP))
-    (store CF_SP (+ off 4))))
+  (store (+ CF_BASE (deref CF_SP)) (- (deref VM_RP) 1))
+  (store (+ CF_BASE (+ (deref CF_SP) 2)) (deref DSP))
+  (store CF_SP (+ (deref CF_SP) 4)))
 
 ;; pop a catch frame (normal return path)
 (def catch_pop () : void [semidet]
@@ -27,19 +26,19 @@
 
 ;; throw — restore state to most recent catch frame and unwind
 ;; ( error-code -- )
+;; VM_RP is set AFTER all let cleanups so rack-based let vars are already
+;; popped before the non-local RP restore; f_throw's own ret then jumps to
+;; the catch site.
 (def f_throw () : void [nondet]
   (let ((code (ds_pop)))
     (if (= (deref CF_SP) 0)
-      ;; no catch frame: print error and abort
       (do (print_str "uncaught throw: ")
           (print_num code)
           (emit 10)
           (bye))
-      ;; restore to catch frame
       (let ((off (- (deref CF_SP) 4)))
         (store THROWN code)
         (store CF_SP off)
         (store DSP (deref (+ CF_BASE (+ off 2))))
-        (store VM_RP (deref (+ CF_BASE off)))))))
-        ;; current function's RET will pop from restored RP
-        ;; -> lands back in the caller that set up the catch
+        (store THROW_RP (deref (+ CF_BASE off))))))
+  (store VM_RP (deref THROW_RP)))

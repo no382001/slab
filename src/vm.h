@@ -94,6 +94,7 @@ enum op : uint8_t {
   TOR,
   FROMR,
   RFETCH,
+  RPICK,
   // alu
   ADD,
   SUB,

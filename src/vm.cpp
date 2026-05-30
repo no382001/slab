@@ -70,6 +70,11 @@ inline auto h_fromr(vm &v) -> void { push(v, rpop(v)); }
 
 inline auto h_rfetch(vm &v) -> void { push(v, v.rs(v.rp() - 1)); }
 
+inline auto h_rpick(vm &v) -> void {
+  auto n = static_cast<ucell_t>(fetch_cell(v));
+  push(v, v.rs(v.rp() - 1 - n));
+}
+
 inline auto h_add(vm &v) -> void {
   auto b = pop(v);
   top(v) += b;
@@ -181,6 +186,7 @@ constexpr std::array<op_info, OP_COUNT> dispatch = {{
     {TOR, ">r", 1, 0, 0, 1},
     {FROMR, "r>", 0, 1, 1, 0},
     {RFETCH, "r@", 0, 1, 1, 1},
+    {RPICK, "rpick", 0, 1, 1, 1},
     {ADD, "+", 2, 1, 0, 0},
     {SUB, "-", 2, 1, 0, 0},
     {MUL, "*", 2, 1, 0, 0},
@@ -200,16 +206,17 @@ constexpr std::array<op_info, OP_COUNT> dispatch = {{
 }};
 
 static_assert(dispatch[STORE].code == STORE, "dispatch table out of order");
+static_assert(dispatch[RPICK].code == RPICK, "dispatch table out of order");
 
 auto run(vm &v) -> void {
   static const void *dtable[OP_COUNT] = {
-      &&do_nop,     &&do_lit,  &&do_load, &&do_store,   &&do_loadb, &&do_storeb,
-      &&do_drop,    &&do_dup,  &&do_swap, &&do_over,    &&do_tor,   &&do_fromr,
-      &&do_rfetch,  &&do_add,  &&do_sub,  &&do_mul,     &&do_div,   &&do_mod,
-      &&do_and,     &&do_or,   &&do_xor,  &&do_eq,      &&do_lt,    &&do_branch,
-      &&do_zbranch, &&do_call, &&do_ret,  &&do_execute, &&do_trap,
+      &&do_nop,     &&do_lit,    &&do_load, &&do_store,   &&do_loadb,  &&do_storeb,
+      &&do_drop,    &&do_dup,    &&do_swap, &&do_over,    &&do_tor,    &&do_fromr,
+      &&do_rfetch,  &&do_rpick,  &&do_add,  &&do_sub,     &&do_mul,    &&do_div,
+      &&do_mod,     &&do_and,    &&do_or,   &&do_xor,     &&do_eq,     &&do_lt,
+      &&do_branch,  &&do_zbranch,&&do_call, &&do_ret,     &&do_execute,&&do_trap,
   };
-  static_assert(OP_COUNT == 29, "update dtable");
+  static_assert(OP_COUNT == 30, "update dtable");
 
   // fetch next opcode, run checks, return target label
   auto next = [&]() -> const void * {
@@ -231,6 +238,7 @@ auto run(vm &v) -> void {
       switch (opcode) {
       case LIT:
       case TRAP:
+      case RPICK:
         std::fprintf(v.trace_out, "\t%d", read_cell(v, v.ip()));
         break;
       case BRANCH:
@@ -306,6 +314,9 @@ do_fromr:
   goto *(next());
 do_rfetch:
   h_rfetch(v);
+  goto *(next());
+do_rpick:
+  h_rpick(v);
   goto *(next());
 do_add:
   h_add(v);

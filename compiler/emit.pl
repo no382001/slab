@@ -30,6 +30,7 @@ collect_labels([Token | Rest], Pos, Labels) :-
 
 token_size(op(_), S)      :- gen:cell_size(S).
 token_size(lit(_), S)     :- gen:cell_size(C), S is C * 2.     % opcode + value
+token_size(rpick(_), S)   :- gen:cell_size(C), S is C * 2.     % opcode + depth
 token_size(call(_), S)    :- gen:cell_size(C), S is C * 2.     % opcode + addr
 token_size(branch(_), S)  :- gen:cell_size(C), S is C * 2.     % opcode + addr
 token_size(zbranch(_), S) :- gen:cell_size(C), S is C * 2.     % opcode + addr
@@ -57,6 +58,14 @@ encode_token(lit(N), _, Bytes) :-
     encode_cell(CS, Op, OpBytes),
     encode_cell(CS, N, ValBytes),
     append(OpBytes, ValBytes, Bytes).
+
+%% rpick: rpick opcode + depth
+encode_token(rpick(N), _, Bytes) :-
+    opcode(rpick, Op),
+    gen:cell_size(CS),
+    encode_cell(CS, Op, OpBytes),
+    encode_cell(CS, N, DepthBytes),
+    append(OpBytes, DepthBytes, Bytes).
 
 %% opcode
 encode_token(op(Name), _, Bytes) :-

@@ -16,4 +16,4 @@ fi
 
 echo "loading..."
 
-{ cat "$fth"; cat /dev/tty; } | "$dir/vm" "$bin"
+{ cat "$fth"; cat /dev/tty; } | "$dir/vm" "$@" "$bin"
