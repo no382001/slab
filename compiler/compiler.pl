@@ -273,15 +273,22 @@ warn_effects([overpermissive(Name, Decl, Inferred)|Rest]) :-
 
 %% dead code warnings to stderr
 warn_dead_code([]).
-warn_dead_code([Name|Rest]) :-
+warn_dead_code([Kind-Name|Rest]) :-
     atom_chars(Name, NameChars),
+    kind_label(Kind, KindLabel),
     ansi_yellow("warning:", WarnTag),
     ansi_bold(NameChars, BoldName),
-    append(WarnTag, " unused function '", P1),
-    append(P1, BoldName, P2),
-    append(P2, "'\n", Msg),
+    append(WarnTag, " unused ", P1),
+    append(P1, KindLabel, P2),
+    append(P2, " '", P3),
+    append(P3, BoldName, P4),
+    append(P4, "'\n", Msg),
     write_stderr(Msg),
     warn_dead_code(Rest).
+
+kind_label(func,   "function").
+kind_label(const,  "const").
+kind_label(extern, "extern").
 
 %% format typecheck errors to stdout
 format_typecheck_errors([], _).

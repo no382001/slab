@@ -494,6 +494,26 @@ setup() {
   [[ -z "$warnings" ]]
 }
 
+@test "deadcode: warns on unused const" {
+  warnings="$(compile_warnings '(const UNUSED int 42) (def main () : void (emit 65) (bye))')"
+  [[ "$warnings" == *"unused const"*"UNUSED"* ]]
+}
+
+@test "deadcode: no warning when const is used" {
+  warnings="$(compile_warnings '(const N int 65) (def main () : void (emit N) (bye))')"
+  [[ "$warnings" != *"unused const"* ]]
+}
+
+@test "deadcode: warns on unused extern" {
+  warnings="$(compile_warnings '(extern noop 10 () : void) (def main () : void (emit 65) (bye))')"
+  [[ "$warnings" == *"unused extern"*"noop"* ]]
+}
+
+@test "deadcode: no warning when extern is used" {
+  warnings="$(compile_warnings '(extern noop 10 () : void) (def main () : void (noop) (bye))')"
+  [[ "$warnings" != *"unused extern"* ]]
+}
+
 # ============================================================
 # constant folding
 # ============================================================

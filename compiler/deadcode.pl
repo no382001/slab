@@ -6,28 +6,28 @@
 %% entry point
 %% ============================================================
 
-find_dead_code(Defs, DeadNames) :-
+find_dead_code(Defs, Dead) :-
     collect_defined(Defs, Defined),
     collect_referenced(Defs, Referenced),
-    findall(Name,
-        (member(Name, Defined),
+    findall(Kind-Name,
+        (member(Kind-Name, Defined),
          Name \= main,
          \+ member(Name, Referenced)),
-        DeadNames).
+        Dead).
 
 %% ============================================================
-%% collect defined function names
+%% collect defined names with their kind
 %% ============================================================
 
 collect_defined([], []).
-collect_defined([def(Name, _, _, _, _)|Rest], [Name|Names]) :-
+collect_defined([Def|Rest], [Kind-Name|Names]) :-
+    Def =.. [Functor, Name | _],
+    def_kind(Functor, Kind),
     collect_defined(Rest, Names).
-collect_defined([const(_, _, _)|Rest], Names) :-
-    collect_defined(Rest, Names).
-collect_defined([extern(_, _, _)|Rest], Names) :-
-    collect_defined(Rest, Names).
-collect_defined([extern(_, _, _, _)|Rest], Names) :-
-    collect_defined(Rest, Names).
+
+def_kind(def,func).
+def_kind(const,const).
+def_kind(extern,extern).
 
 %% ============================================================
 %% collect all referenced names (calls + addr)
@@ -48,7 +48,7 @@ body_refs(Exprs, Refs) :-
 
 expr_refs(num(_), []).
 expr_refs(str(_), []).
-expr_refs(var(_), []).
+expr_refs(var(Name), [Name]).
 expr_refs(addr(Name), [Name]).
 expr_refs(execute(E), Refs) :- expr_refs(E, Refs).
 expr_refs(deref(E), Refs) :- expr_refs(E, Refs).

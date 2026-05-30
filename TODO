@@ -13,7 +13,6 @@ errors / warnings:
 - deref on a non-ptr type
 - if branches with mismatched types
 - [det] function laundering effects via addr+execute of a [nondet] function
-- extern / const / $alloc declared but never used (warning)
 
 optimizations:
 - sub-expression constfold: fold det calls with constant args anywhere they appear, not just inside det functions — the containing function's effect is irrelevant
