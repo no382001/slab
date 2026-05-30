@@ -1,6 +1,3 @@
-- store and store8 should be c@ and c! to avoid confusion
-- with that step i should also reduce the mapping overhead, it should be 1:1
-
 errors / warnings:
 - conflicting alloc/const/def names
 - undefined function or variable reference

@@ -53,7 +53,7 @@
 
 ;; Returns quotient; remainder in C8_DR.
 (def c8_div ((a : int) (b : int)) : int [semidet]
-  (store C8_DR (mod a b))
+  (! C8_DR (mod a b))
   (/ a b))
 
 ;; ============================================================
@@ -61,46 +61,46 @@
 ;; ============================================================
 
 (def c8_rand () : int [nondet]
-  (store C8_SEED (and (+ (deref C8_SEED) (millis)) 32767))
-  (and (deref C8_SEED) 255))
+  (! C8_SEED (and (+ (@ C8_SEED) (millis)) 32767))
+  (and (@ C8_SEED) 255))
 
 ;; ============================================================
-;; Font init — store 16 sprites (5 bytes each) into C8_MEM[0..79]
+;; Font init — ! 16 sprites (5 bytes each) into C8_MEM[0..79]
 ;; ============================================================
 
 (def c8_load_font () : void [semidet]
   ;; 0: F0 90 90 90 F0
-  (store8 (+ C8_MEM 0) 240) (store8 (+ C8_MEM 1) 144) (store8 (+ C8_MEM 2) 144) (store8 (+ C8_MEM 3) 144) (store8 (+ C8_MEM 4) 240)
+  (c! (+ C8_MEM 0) 240) (c! (+ C8_MEM 1) 144) (c! (+ C8_MEM 2) 144) (c! (+ C8_MEM 3) 144) (c! (+ C8_MEM 4) 240)
   ;; 1: 20 60 20 20 70
-  (store8 (+ C8_MEM 5) 32) (store8 (+ C8_MEM 6) 96) (store8 (+ C8_MEM 7) 32) (store8 (+ C8_MEM 8) 32) (store8 (+ C8_MEM 9) 112)
+  (c! (+ C8_MEM 5) 32) (c! (+ C8_MEM 6) 96) (c! (+ C8_MEM 7) 32) (c! (+ C8_MEM 8) 32) (c! (+ C8_MEM 9) 112)
   ;; 2: F0 10 F0 80 F0
-  (store8 (+ C8_MEM 10) 240) (store8 (+ C8_MEM 11) 16) (store8 (+ C8_MEM 12) 240) (store8 (+ C8_MEM 13) 128) (store8 (+ C8_MEM 14) 240)
+  (c! (+ C8_MEM 10) 240) (c! (+ C8_MEM 11) 16) (c! (+ C8_MEM 12) 240) (c! (+ C8_MEM 13) 128) (c! (+ C8_MEM 14) 240)
   ;; 3: F0 10 F0 10 F0
-  (store8 (+ C8_MEM 15) 240) (store8 (+ C8_MEM 16) 16) (store8 (+ C8_MEM 17) 240) (store8 (+ C8_MEM 18) 16) (store8 (+ C8_MEM 19) 240)
+  (c! (+ C8_MEM 15) 240) (c! (+ C8_MEM 16) 16) (c! (+ C8_MEM 17) 240) (c! (+ C8_MEM 18) 16) (c! (+ C8_MEM 19) 240)
   ;; 4: 90 90 F0 10 10
-  (store8 (+ C8_MEM 20) 144) (store8 (+ C8_MEM 21) 144) (store8 (+ C8_MEM 22) 240) (store8 (+ C8_MEM 23) 16) (store8 (+ C8_MEM 24) 16)
+  (c! (+ C8_MEM 20) 144) (c! (+ C8_MEM 21) 144) (c! (+ C8_MEM 22) 240) (c! (+ C8_MEM 23) 16) (c! (+ C8_MEM 24) 16)
   ;; 5: F0 80 F0 10 F0
-  (store8 (+ C8_MEM 25) 240) (store8 (+ C8_MEM 26) 128) (store8 (+ C8_MEM 27) 240) (store8 (+ C8_MEM 28) 16) (store8 (+ C8_MEM 29) 240)
+  (c! (+ C8_MEM 25) 240) (c! (+ C8_MEM 26) 128) (c! (+ C8_MEM 27) 240) (c! (+ C8_MEM 28) 16) (c! (+ C8_MEM 29) 240)
   ;; 6: F0 80 F0 90 F0
-  (store8 (+ C8_MEM 30) 240) (store8 (+ C8_MEM 31) 128) (store8 (+ C8_MEM 32) 240) (store8 (+ C8_MEM 33) 144) (store8 (+ C8_MEM 34) 240)
+  (c! (+ C8_MEM 30) 240) (c! (+ C8_MEM 31) 128) (c! (+ C8_MEM 32) 240) (c! (+ C8_MEM 33) 144) (c! (+ C8_MEM 34) 240)
   ;; 7: F0 10 20 40 40
-  (store8 (+ C8_MEM 35) 240) (store8 (+ C8_MEM 36) 16) (store8 (+ C8_MEM 37) 32) (store8 (+ C8_MEM 38) 64) (store8 (+ C8_MEM 39) 64)
+  (c! (+ C8_MEM 35) 240) (c! (+ C8_MEM 36) 16) (c! (+ C8_MEM 37) 32) (c! (+ C8_MEM 38) 64) (c! (+ C8_MEM 39) 64)
   ;; 8: F0 90 F0 90 F0
-  (store8 (+ C8_MEM 40) 240) (store8 (+ C8_MEM 41) 144) (store8 (+ C8_MEM 42) 240) (store8 (+ C8_MEM 43) 144) (store8 (+ C8_MEM 44) 240)
+  (c! (+ C8_MEM 40) 240) (c! (+ C8_MEM 41) 144) (c! (+ C8_MEM 42) 240) (c! (+ C8_MEM 43) 144) (c! (+ C8_MEM 44) 240)
   ;; 9: F0 90 F0 10 F0
-  (store8 (+ C8_MEM 45) 240) (store8 (+ C8_MEM 46) 144) (store8 (+ C8_MEM 47) 240) (store8 (+ C8_MEM 48) 16) (store8 (+ C8_MEM 49) 240)
+  (c! (+ C8_MEM 45) 240) (c! (+ C8_MEM 46) 144) (c! (+ C8_MEM 47) 240) (c! (+ C8_MEM 48) 16) (c! (+ C8_MEM 49) 240)
   ;; A: F0 90 F0 90 90
-  (store8 (+ C8_MEM 50) 240) (store8 (+ C8_MEM 51) 144) (store8 (+ C8_MEM 52) 240) (store8 (+ C8_MEM 53) 144) (store8 (+ C8_MEM 54) 144)
+  (c! (+ C8_MEM 50) 240) (c! (+ C8_MEM 51) 144) (c! (+ C8_MEM 52) 240) (c! (+ C8_MEM 53) 144) (c! (+ C8_MEM 54) 144)
   ;; B: E0 90 E0 90 E0
-  (store8 (+ C8_MEM 55) 224) (store8 (+ C8_MEM 56) 144) (store8 (+ C8_MEM 57) 224) (store8 (+ C8_MEM 58) 144) (store8 (+ C8_MEM 59) 224)
+  (c! (+ C8_MEM 55) 224) (c! (+ C8_MEM 56) 144) (c! (+ C8_MEM 57) 224) (c! (+ C8_MEM 58) 144) (c! (+ C8_MEM 59) 224)
   ;; C: F0 80 80 80 F0
-  (store8 (+ C8_MEM 60) 240) (store8 (+ C8_MEM 61) 128) (store8 (+ C8_MEM 62) 128) (store8 (+ C8_MEM 63) 128) (store8 (+ C8_MEM 64) 240)
+  (c! (+ C8_MEM 60) 240) (c! (+ C8_MEM 61) 128) (c! (+ C8_MEM 62) 128) (c! (+ C8_MEM 63) 128) (c! (+ C8_MEM 64) 240)
   ;; D: E0 90 90 90 E0
-  (store8 (+ C8_MEM 65) 224) (store8 (+ C8_MEM 66) 144) (store8 (+ C8_MEM 67) 144) (store8 (+ C8_MEM 68) 144) (store8 (+ C8_MEM 69) 224)
+  (c! (+ C8_MEM 65) 224) (c! (+ C8_MEM 66) 144) (c! (+ C8_MEM 67) 144) (c! (+ C8_MEM 68) 144) (c! (+ C8_MEM 69) 224)
   ;; E: F0 80 F0 80 F0
-  (store8 (+ C8_MEM 70) 240) (store8 (+ C8_MEM 71) 128) (store8 (+ C8_MEM 72) 240) (store8 (+ C8_MEM 73) 128) (store8 (+ C8_MEM 74) 240)
+  (c! (+ C8_MEM 70) 240) (c! (+ C8_MEM 71) 128) (c! (+ C8_MEM 72) 240) (c! (+ C8_MEM 73) 128) (c! (+ C8_MEM 74) 240)
   ;; F: F0 80 F0 80 80
-  (store8 (+ C8_MEM 75) 240) (store8 (+ C8_MEM 76) 128) (store8 (+ C8_MEM 77) 240) (store8 (+ C8_MEM 78) 128) (store8 (+ C8_MEM 79) 128))
+  (c! (+ C8_MEM 75) 240) (c! (+ C8_MEM 76) 128) (c! (+ C8_MEM 77) 240) (c! (+ C8_MEM 78) 128) (c! (+ C8_MEM 79) 128))
 
 ;; ============================================================
 ;; State init
@@ -108,35 +108,35 @@
 
 (def c8_init () : void [nondet]
   (c8_load_font)
-  (store C8_PC 512)
-  (store C8_I 0)
-  (store C8_SP 0)
-  (store C8_DT 0)
-  (store C8_ST 0)
-  (store C8_SEED 12345)
-  (store C8_LTICK (millis))
+  (! C8_PC 512)
+  (! C8_I 0)
+  (! C8_SP 0)
+  (! C8_DT 0)
+  (! C8_ST 0)
+  (! C8_SEED 12345)
+  (! C8_LTICK (millis))
   ;; clear V0-VF
-  (store C8_ITER 0)
-  (while (< (deref C8_ITER) 16)
-    (store8 (+ C8_V (deref C8_ITER)) 0)
-    (store C8_ITER (+ (deref C8_ITER) 1)))
+  (! C8_ITER 0)
+  (while (< (@ C8_ITER) 16)
+    (c! (+ C8_V (@ C8_ITER)) 0)
+    (! C8_ITER (+ (@ C8_ITER) 1)))
   ;; clear framebuffer
-  (store C8_ITER 0)
-  (while (< (deref C8_ITER) 2048)
-    (store8 (+ C8_FB (deref C8_ITER)) 0)
-    (store C8_ITER (+ (deref C8_ITER) 1))))
+  (! C8_ITER 0)
+  (while (< (@ C8_ITER) 2048)
+    (c! (+ C8_FB (@ C8_ITER)) 0)
+    (! C8_ITER (+ (@ C8_ITER) 1))))
 
 ;; ============================================================
 ;; ROM loader — reads bytes from stdin until EOF
 ;; ============================================================
 
 (def c8_load_rom () : void [nondet]
-  (store C8_RLEN 0)
-  (store C8_ITER (key))
-  (while (!= (deref C8_ITER) -1)
-    (store8 (+ C8_MEM (+ 512 (deref C8_RLEN))) (deref C8_ITER))
-    (store C8_RLEN (+ (deref C8_RLEN) 1))
-    (store C8_ITER (key))))
+  (! C8_RLEN 0)
+  (! C8_ITER (key))
+  (while (!= (@ C8_ITER) -1)
+    (c! (+ C8_MEM (+ 512 (@ C8_RLEN))) (@ C8_ITER))
+    (! C8_RLEN (+ (@ C8_RLEN) 1))
+    (! C8_ITER (key))))
 
 ;; ============================================================
 ;; Timer — decrement DT at ~60Hz
@@ -144,24 +144,24 @@
 
 (def c8_tick_timer () : void [nondet]
   (let ((now (millis)))
-    (let ((elapsed (- now (deref C8_LTICK))))
+    (let ((elapsed (- now (@ C8_LTICK))))
       (if (< 16 elapsed)
-        (do (if (< 0 (deref C8_DT))
-              (store C8_DT (- (deref C8_DT) 1))
-              (store C8_ITER 0))
-            (if (< 0 (deref C8_ST))
-              (do (store C8_ST (- (deref C8_ST) 1))
-                  (if (< 0 (deref C8_ST)) (sound 1) (sound 0)))
+        (do (if (< 0 (@ C8_DT))
+              (! C8_DT (- (@ C8_DT) 1))
+              (! C8_ITER 0))
+            (if (< 0 (@ C8_ST))
+              (do (! C8_ST (- (@ C8_ST) 1))
+                  (if (< 0 (@ C8_ST)) (sound 1) (sound 0)))
               (sound 0))
-            (store C8_LTICK now))
-        (store C8_ITER 0)))))
+            (! C8_LTICK now))
+        (! C8_ITER 0)))))
 
 ;; ============================================================
 ;; Opcode helpers — read current decoded fields from globals
 ;; ============================================================
 
-(def c8_vx () : int [semidet]   (deref8 (+ C8_V (deref C8_X))))
-(def c8_vy () : int [semidet]   (deref8 (+ C8_V (deref C8_Y))))
+(def c8_vx () : int [semidet]   (c@ (+ C8_V (@ C8_X))))
+(def c8_vy () : int [semidet]   (c@ (+ C8_V (@ C8_Y))))
 (def c8_vf_addr () : int [semidet] (+ C8_V 15))
 
 ;; ============================================================
@@ -169,49 +169,49 @@
 ;; ============================================================
 
 (def c8_op_0 () : void [semidet]
-  (if (= (deref C8_NN) 224)
-    (do (store C8_ITER 0)
-        (while (< (deref C8_ITER) 2048)
-          (store8 (+ C8_FB (deref C8_ITER)) 0)
-          (store C8_ITER (+ (deref C8_ITER) 1))))
-    (if (= (deref C8_NN) 238)
-      (do (store C8_SP (- (deref C8_SP) 1))
-          (store C8_PC (deref (+ C8_STACK (c8_mul (deref C8_SP) 2)))))
-      (store C8_ITER 0))))
+  (if (= (@ C8_NN) 224)
+    (do (! C8_ITER 0)
+        (while (< (@ C8_ITER) 2048)
+          (c! (+ C8_FB (@ C8_ITER)) 0)
+          (! C8_ITER (+ (@ C8_ITER) 1))))
+    (if (= (@ C8_NN) 238)
+      (do (! C8_SP (- (@ C8_SP) 1))
+          (! C8_PC (@ (+ C8_STACK (c8_mul (@ C8_SP) 2)))))
+      (! C8_ITER 0))))
 
 ;; ============================================================
 ;; 0x1: 1NNN jump to NNN
 ;; ============================================================
 
 (def c8_op_1 () : void [semidet]
-  (store C8_PC (deref C8_NNN)))
+  (! C8_PC (@ C8_NNN)))
 
 ;; ============================================================
 ;; 0x2: 2NNN call subroutine
 ;; ============================================================
 
 (def c8_op_2 () : void [semidet]
-  (store (+ C8_STACK (c8_mul (deref C8_SP) 2)) (deref C8_PC))
-  (store C8_SP (+ (deref C8_SP) 1))
-  (store C8_PC (deref C8_NNN)))
+  (! (+ C8_STACK (c8_mul (@ C8_SP) 2)) (@ C8_PC))
+  (! C8_SP (+ (@ C8_SP) 1))
+  (! C8_PC (@ C8_NNN)))
 
 ;; ============================================================
 ;; 0x3: 3XNN skip if Vx == NN
 ;; ============================================================
 
 (def c8_op_3 () : void [semidet]
-  (if (= (c8_vx) (deref C8_NN))
-    (store C8_PC (+ (deref C8_PC) 2))
-    (store C8_ITER 0)))
+  (if (= (c8_vx) (@ C8_NN))
+    (! C8_PC (+ (@ C8_PC) 2))
+    (! C8_ITER 0)))
 
 ;; ============================================================
 ;; 0x4: 4XNN skip if Vx != NN
 ;; ============================================================
 
 (def c8_op_4 () : void [semidet]
-  (if (!= (c8_vx) (deref C8_NN))
-    (store C8_PC (+ (deref C8_PC) 2))
-    (store C8_ITER 0)))
+  (if (!= (c8_vx) (@ C8_NN))
+    (! C8_PC (+ (@ C8_PC) 2))
+    (! C8_ITER 0)))
 
 ;; ============================================================
 ;; 0x5: 5XY0 skip if Vx == Vy
@@ -219,23 +219,23 @@
 
 (def c8_op_5 () : void [semidet]
   (if (= (c8_vx) (c8_vy))
-    (store C8_PC (+ (deref C8_PC) 2))
-    (store C8_ITER 0)))
+    (! C8_PC (+ (@ C8_PC) 2))
+    (! C8_ITER 0)))
 
 ;; ============================================================
 ;; 0x6: 6XNN set Vx = NN
 ;; ============================================================
 
 (def c8_op_6 () : void [semidet]
-  (store8 (+ C8_V (deref C8_X)) (deref C8_NN)))
+  (c! (+ C8_V (@ C8_X)) (@ C8_NN)))
 
 ;; ============================================================
 ;; 0x7: 7XNN add NN to Vx (no carry)
 ;; ============================================================
 
 (def c8_op_7 () : void [semidet]
-  (store8 (+ C8_V (deref C8_X))
-    (and (+ (c8_vx) (deref C8_NN)) 255)))
+  (c! (+ C8_V (@ C8_X))
+    (and (+ (c8_vx) (@ C8_NN)) 255)))
 
 ;; ============================================================
 ;; 0x8: arithmetic / logic
@@ -243,40 +243,40 @@
 
 (def c8_op_8 () : void [semidet]
   (let ((vx (c8_vx)) (vy (c8_vy)))
-    (if (= (deref C8_N) 0)
+    (if (= (@ C8_N) 0)
       ;; 8XY0: Vx = Vy
-      (store8 (+ C8_V (deref C8_X)) vy)
-    (if (= (deref C8_N) 1)
+      (c! (+ C8_V (@ C8_X)) vy)
+    (if (= (@ C8_N) 1)
       ;; 8XY1: Vx |= Vy (reset VF quirk: skip for now)
-      (store8 (+ C8_V (deref C8_X)) (or vx vy))
-    (if (= (deref C8_N) 2)
+      (c! (+ C8_V (@ C8_X)) (or vx vy))
+    (if (= (@ C8_N) 2)
       ;; 8XY2: Vx &= Vy
-      (store8 (+ C8_V (deref C8_X)) (and vx vy))
-    (if (= (deref C8_N) 3)
+      (c! (+ C8_V (@ C8_X)) (and vx vy))
+    (if (= (@ C8_N) 3)
       ;; 8XY3: Vx ^= Vy
-      (store8 (+ C8_V (deref C8_X)) (xor vx vy))
-    (if (= (deref C8_N) 4)
+      (c! (+ C8_V (@ C8_X)) (xor vx vy))
+    (if (= (@ C8_N) 4)
       ;; 8XY4: Vx += Vy, VF = carry
       (let ((res (+ vx vy)))
-        (store8 (+ C8_V (deref C8_X)) (and res 255))
-        (store8 (c8_vf_addr) (if (< 255 res) 1 0)))
-    (if (= (deref C8_N) 5)
+        (c! (+ C8_V (@ C8_X)) (and res 255))
+        (c! (c8_vf_addr) (if (< 255 res) 1 0)))
+    (if (= (@ C8_N) 5)
       ;; 8XY5: Vx -= Vy, VF = 1 if no borrow
-      (do (store8 (c8_vf_addr) (if (< vx vy) 0 1))
-          (store8 (+ C8_V (deref C8_X)) (and (- vx vy) 255)))
-    (if (= (deref C8_N) 6)
+      (do (c! (c8_vf_addr) (if (< vx vy) 0 1))
+          (c! (+ C8_V (@ C8_X)) (and (- vx vy) 255)))
+    (if (= (@ C8_N) 6)
       ;; 8XY6: Vx >>= 1, VF = old LSB
-      (do (store8 (c8_vf_addr) (and vx 1))
-          (store8 (+ C8_V (deref C8_X)) (c8_div vx 2)))
-    (if (= (deref C8_N) 7)
+      (do (c! (c8_vf_addr) (and vx 1))
+          (c! (+ C8_V (@ C8_X)) (c8_div vx 2)))
+    (if (= (@ C8_N) 7)
       ;; 8XY7: Vx = Vy - Vx, VF = 1 if no borrow
-      (do (store8 (c8_vf_addr) (if (< vy vx) 0 1))
-          (store8 (+ C8_V (deref C8_X)) (and (- vy vx) 255)))
-    (if (= (deref C8_N) 14)
+      (do (c! (c8_vf_addr) (if (< vy vx) 0 1))
+          (c! (+ C8_V (@ C8_X)) (and (- vy vx) 255)))
+    (if (= (@ C8_N) 14)
       ;; 8XYE: Vx <<= 1, VF = old MSB
-      (do (store8 (c8_vf_addr) (c8_div (and vx 128) 128))
-          (store8 (+ C8_V (deref C8_X)) (and (c8_mul vx 2) 255)))
-      (store C8_ITER 0))))))))))))
+      (do (c! (c8_vf_addr) (c8_div (and vx 128) 128))
+          (c! (+ C8_V (@ C8_X)) (and (c8_mul vx 2) 255)))
+      (! C8_ITER 0))))))))))))
 
 ;; ============================================================
 ;; 0x9: 9XY0 skip if Vx != Vy
@@ -284,29 +284,29 @@
 
 (def c8_op_9 () : void [semidet]
   (if (!= (c8_vx) (c8_vy))
-    (store C8_PC (+ (deref C8_PC) 2))
-    (store C8_ITER 0)))
+    (! C8_PC (+ (@ C8_PC) 2))
+    (! C8_ITER 0)))
 
 ;; ============================================================
 ;; 0xA: ANNN set I = NNN
 ;; ============================================================
 
 (def c8_op_A () : void [semidet]
-  (store C8_I (deref C8_NNN)))
+  (! C8_I (@ C8_NNN)))
 
 ;; ============================================================
 ;; 0xB: BNNN jump to V0 + NNN
 ;; ============================================================
 
 (def c8_op_B () : void [semidet]
-  (store C8_PC (+ (deref8 C8_V) (deref C8_NNN))))
+  (! C8_PC (+ (c@ C8_V) (@ C8_NNN))))
 
 ;; ============================================================
 ;; 0xC: CXNN Vx = rand & NN
 ;; ============================================================
 
 (def c8_op_C () : void [nondet]
-  (store8 (+ C8_V (deref C8_X)) (and (c8_rand) (deref C8_NN))))
+  (c! (+ C8_V (@ C8_X)) (and (c8_rand) (@ C8_NN))))
 
 ;; ============================================================
 ;; 0xD: DXYN draw sprite
@@ -315,42 +315,42 @@
 (def c8_op_D () : void [semidet]
   (let ((sx (and (c8_vx) 63))
         (sy (and (c8_vy) 31)))
-    (store8 (c8_vf_addr) 0)
-    (store C8_ROW 0)
-    (while (< (deref C8_ROW) (deref C8_N))
-      (store C8_PIX (deref8 (+ C8_MEM (+ (deref C8_I) (deref C8_ROW)))))
-      (store C8_MASK 128)
-      (store C8_COL 0)
-      (while (< (deref C8_COL) 8)
-        (if (!= 0 (and (deref C8_PIX) (deref C8_MASK)))
-          (let ((dx (and (+ sx (deref C8_COL)) 63))
-                (dy (and (+ sy (deref C8_ROW)) 31)))
-            (store C8_DIDX (+ (c8_mul dy 64) dx))
-            (if (!= 0 (deref8 (+ C8_FB (deref C8_DIDX))))
-              (do (store8 (c8_vf_addr) 1)
-                  (store8 (+ C8_FB (deref C8_DIDX)) 0))
-              (store8 (+ C8_FB (deref C8_DIDX)) 1)))
-          (store C8_ITER 0))
-        (store C8_MASK (c8_div (deref C8_MASK) 2))
-        (store C8_COL (+ (deref C8_COL) 1)))
-      (store C8_ROW (+ (deref C8_ROW) 1)))))
+    (c! (c8_vf_addr) 0)
+    (! C8_ROW 0)
+    (while (< (@ C8_ROW) (@ C8_N))
+      (! C8_PIX (c@ (+ C8_MEM (+ (@ C8_I) (@ C8_ROW)))))
+      (! C8_MASK 128)
+      (! C8_COL 0)
+      (while (< (@ C8_COL) 8)
+        (if (!= 0 (and (@ C8_PIX) (@ C8_MASK)))
+          (let ((dx (and (+ sx (@ C8_COL)) 63))
+                (dy (and (+ sy (@ C8_ROW)) 31)))
+            (! C8_DIDX (+ (c8_mul dy 64) dx))
+            (if (!= 0 (c@ (+ C8_FB (@ C8_DIDX))))
+              (do (c! (c8_vf_addr) 1)
+                  (c! (+ C8_FB (@ C8_DIDX)) 0))
+              (c! (+ C8_FB (@ C8_DIDX)) 1)))
+          (! C8_ITER 0))
+        (! C8_MASK (c8_div (@ C8_MASK) 2))
+        (! C8_COL (+ (@ C8_COL) 1)))
+      (! C8_ROW (+ (@ C8_ROW) 1)))))
 
 ;; ============================================================
 ;; 0xE: keypad skip
 ;; ============================================================
 
 (def c8_op_E () : void [nondet]
-  (if (= (deref C8_NN) 158)
+  (if (= (@ C8_NN) 158)
     ;; EX9E: skip if key Vx pressed
     (if (key-is-down (c8_vx))
-      (store C8_PC (+ (deref C8_PC) 2))
-      (store C8_ITER 0))
-    (if (= (deref C8_NN) 161)
+      (! C8_PC (+ (@ C8_PC) 2))
+      (! C8_ITER 0))
+    (if (= (@ C8_NN) 161)
       ;; EXA1: skip if key Vx NOT pressed
       (if (key-is-down (c8_vx))
-        (store C8_ITER 0)
-        (store C8_PC (+ (deref C8_PC) 2)))
-      (store C8_ITER 0))))
+        (! C8_ITER 0)
+        (! C8_PC (+ (@ C8_PC) 2)))
+      (! C8_ITER 0))))
 
 ;; ============================================================
 ;; 0xF: timers, BCD, memory, key wait
@@ -358,69 +358,69 @@
 
 (def c8_op_F () : void [nondet]
   (let ((vx (c8_vx)))
-    (if (= (deref C8_NN) 7)
+    (if (= (@ C8_NN) 7)
       ;; FX07: Vx = DT
-      (store8 (+ C8_V (deref C8_X)) (deref C8_DT))
-    (if (= (deref C8_NN) 10)
-      ;; FX0A: wait for any key, store in Vx
-      (do (store C8_PIX -1)
-          (while (= (deref C8_PIX) -1)
+      (c! (+ C8_V (@ C8_X)) (@ C8_DT))
+    (if (= (@ C8_NN) 10)
+      ;; FX0A: wait for any key, ! in Vx
+      (do (! C8_PIX -1)
+          (while (= (@ C8_PIX) -1)
             (fb-refresh C8_FB)
-            (store C8_ITER 0)
-            (while (< (deref C8_ITER) 16)
-              (if (key-is-down (deref C8_ITER))
-                (do (store C8_PIX (deref C8_ITER))
-                    (store C8_ITER 16))
-                (store C8_ITER (+ (deref C8_ITER) 1)))))
-          (store8 (+ C8_V (deref C8_X)) (deref C8_PIX)))
-    (if (= (deref C8_NN) 21)
+            (! C8_ITER 0)
+            (while (< (@ C8_ITER) 16)
+              (if (key-is-down (@ C8_ITER))
+                (do (! C8_PIX (@ C8_ITER))
+                    (! C8_ITER 16))
+                (! C8_ITER (+ (@ C8_ITER) 1)))))
+          (c! (+ C8_V (@ C8_X)) (@ C8_PIX)))
+    (if (= (@ C8_NN) 21)
       ;; FX15: DT = Vx
-      (store C8_DT vx)
-    (if (= (deref C8_NN) 24)
+      (! C8_DT vx)
+    (if (= (@ C8_NN) 24)
       ;; FX18: ST = Vx
-      (store C8_ST vx)
-    (if (= (deref C8_NN) 30)
+      (! C8_ST vx)
+    (if (= (@ C8_NN) 30)
       ;; FX1E: I += Vx
-      (store C8_I (+ (deref C8_I) vx))
-    (if (= (deref C8_NN) 41)
+      (! C8_I (+ (@ C8_I) vx))
+    (if (= (@ C8_NN) 41)
       ;; FX29: I = address of sprite for hex digit Vx
-      (store C8_I (c8_mul vx 5))
-    (if (= (deref C8_NN) 51)
+      (! C8_I (c8_mul vx 5))
+    (if (= (@ C8_NN) 51)
       ;; FX33: BCD of Vx at I, I+1, I+2
       (let ((h (c8_div vx 100)))
-        (store8 (+ C8_MEM (deref C8_I)) h)
-        (let ((t (c8_div (deref C8_DR) 10)))
-          (store8 (+ C8_MEM (+ (deref C8_I) 1)) t)
-          (store8 (+ C8_MEM (+ (deref C8_I) 2)) (deref C8_DR))))
-    (if (= (deref C8_NN) 85)
-      ;; FX55: store V0..Vx at memory[I..]
-      (do (store C8_ITER 0)
-          (while (< (deref C8_ITER) (+ (deref C8_X) 1))
-            (store8 (+ C8_MEM (+ (deref C8_I) (deref C8_ITER)))
-                    (deref8 (+ C8_V (deref C8_ITER))))
-            (store C8_ITER (+ (deref C8_ITER) 1))))
-    (if (= (deref C8_NN) 101)
+        (c! (+ C8_MEM (@ C8_I)) h)
+        (let ((t (c8_div (@ C8_DR) 10)))
+          (c! (+ C8_MEM (+ (@ C8_I) 1)) t)
+          (c! (+ C8_MEM (+ (@ C8_I) 2)) (@ C8_DR))))
+    (if (= (@ C8_NN) 85)
+      ;; FX55: ! V0..Vx at memory[I..]
+      (do (! C8_ITER 0)
+          (while (< (@ C8_ITER) (+ (@ C8_X) 1))
+            (c! (+ C8_MEM (+ (@ C8_I) (@ C8_ITER)))
+                    (c@ (+ C8_V (@ C8_ITER))))
+            (! C8_ITER (+ (@ C8_ITER) 1))))
+    (if (= (@ C8_NN) 101)
       ;; FX65: load V0..Vx from memory[I..]
-      (do (store C8_ITER 0)
-          (while (< (deref C8_ITER) (+ (deref C8_X) 1))
-            (store8 (+ C8_V (deref C8_ITER))
-                    (deref8 (+ C8_MEM (+ (deref C8_I) (deref C8_ITER)))))
-            (store C8_ITER (+ (deref C8_ITER) 1))))
-      (store C8_ITER 0))))))))))))
+      (do (! C8_ITER 0)
+          (while (< (@ C8_ITER) (+ (@ C8_X) 1))
+            (c! (+ C8_V (@ C8_ITER))
+                    (c@ (+ C8_MEM (+ (@ C8_I) (@ C8_ITER)))))
+            (! C8_ITER (+ (@ C8_ITER) 1))))
+      (! C8_ITER 0))))))))))))
 
 ;; ============================================================
 ;; Fetch and execute one instruction
 ;; ============================================================
 
 (def c8_step () : void [nondet]
-  (let ((hi (deref8 (+ C8_MEM (deref C8_PC))))
-        (lo (deref8 (+ C8_MEM (+ (deref C8_PC) 1)))))
-    (store C8_PC (+ (deref C8_PC) 2))
-    (store C8_X  (and hi 15))
-    (store C8_NN lo)
-    (store C8_N  (and lo 15))
-    (store C8_NNN (+ (c8_mul (and hi 15) 256) lo))
-    (store C8_Y (c8_div (and lo 240) 16))
+  (let ((hi (c@ (+ C8_MEM (@ C8_PC))))
+        (lo (c@ (+ C8_MEM (+ (@ C8_PC) 1)))))
+    (! C8_PC (+ (@ C8_PC) 2))
+    (! C8_X  (and hi 15))
+    (! C8_NN lo)
+    (! C8_N  (and lo 15))
+    (! C8_NNN (+ (c8_mul (and hi 15) 256) lo))
+    (! C8_Y (c8_div (and lo 240) 16))
     (let ((grp (and hi 240)))
       (if (= grp 0)   (c8_op_0)
       (if (= grp 16)  (c8_op_1)
@@ -438,7 +438,7 @@
       (if (= grp 208) (c8_op_D)
       (if (= grp 224) (c8_op_E)
       (if (= grp 240) (c8_op_F)
-        (store C8_ITER 0))))))))))))))))))))
+        (! C8_ITER 0))))))))))))))))))))
 
 ;; ============================================================
 ;; Main loop: 10 instructions per frame, timer at 60Hz
@@ -449,8 +449,8 @@
   (c8_load_rom)
   (while (fb-refresh C8_FB)
     (c8_tick_timer)
-    (store C8_CYCLE 0)
-    (while (< (deref C8_CYCLE) 20)
+    (! C8_CYCLE 0)
+    (while (< (@ C8_CYCLE) 20)
       (c8_step)
-      (store C8_CYCLE (+ (deref C8_CYCLE) 1))))
+      (! C8_CYCLE (+ (@ C8_CYCLE) 1))))
   (bye))

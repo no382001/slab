@@ -60,18 +60,18 @@
 ;; ============================================================
 
 (def streq ((a : (ptr byte)) (b : (ptr byte))) : bool [semidet]
-  (store STRI 0)
-  (while (if (= (deref8 (+ a (deref STRI))) (deref8 (+ b (deref STRI))))
-           (!= (deref8 (+ a (deref STRI))) 0)
+  (! STRI 0)
+  (while (if (= (c@ (+ a (@ STRI))) (c@ (+ b (@ STRI))))
+           (!= (c@ (+ a (@ STRI))) 0)
            (< 1 0))
-    (store STRI (+ (deref STRI) 1)))
-  (= (deref8 (+ a (deref STRI))) (deref8 (+ b (deref STRI)))))
+    (! STRI (+ (@ STRI) 1)))
+  (= (c@ (+ a (@ STRI))) (c@ (+ b (@ STRI)))))
 
 (def print_str ((s : (ptr byte))) : void [nondet]
-  (store PRINTI 0)
-  (while (!= (deref8 (+ s (deref PRINTI))) 0)
-    (emit (deref8 (+ s (deref PRINTI))))
-    (store PRINTI (+ (deref PRINTI) 1))))
+  (! PRINTI 0)
+  (while (!= (c@ (+ s (@ PRINTI))) 0)
+    (emit (c@ (+ s (@ PRINTI))))
+    (! PRINTI (+ (@ PRINTI) 1))))
 
 ;; print a signed integer in decimal
 ;; uses: PN_VAL, PN_IDX, PN_BUF; calls divmod (which uses REM-QUOT)
@@ -81,64 +81,64 @@
     (do
       ;; negative
       (if (< n 0)
-        (do (emit 45) (store PN_VAL (- 0 n)))
-        (store PN_VAL n))
+        (do (emit 45) (! PN_VAL (- 0 n)))
+        (! PN_VAL n))
       ;; extract digits, remainder in REM
-      (store PN_IDX 0)
-      (while (< 0 (deref PN_VAL))
-        (store8 (+ PN_BUF (deref PN_IDX)) (+ 48 (mod (deref PN_VAL) 10)))
-        (store PN_VAL (/ (deref PN_VAL) 10))
-        (store PN_IDX (+ (deref PN_IDX) 1)))
+      (! PN_IDX 0)
+      (while (< 0 (@ PN_VAL))
+        (c! (+ PN_BUF (@ PN_IDX)) (+ 48 (mod (@ PN_VAL) 10)))
+        (! PN_VAL (/ (@ PN_VAL) 10))
+        (! PN_IDX (+ (@ PN_IDX) 1)))
       ;; emit reversed
-      (while (< 0 (deref PN_IDX))
-        (store PN_IDX (- (deref PN_IDX) 1))
-        (emit (deref8 (+ PN_BUF (deref PN_IDX))))))))
+      (while (< 0 (@ PN_IDX))
+        (! PN_IDX (- (@ PN_IDX) 1))
+        (emit (c@ (+ PN_BUF (@ PN_IDX))))))))
 
 ;; ============================================================
 ;; dictionary
 ;; ============================================================
 
 (def dict_init () : void [semidet]
-  (store LATEST 0)
-  (store HERE HEAP))
+  (! LATEST 0)
+  (! HERE HEAP))
 
 (def dict_check () : void [nondet]
-  (if (< HEAP_LIMIT (deref HERE))
+  (if (< HEAP_LIMIT (@ HERE))
     (do (print_str "assert: heap overflow") (emit 10) (assert-fail))
-    (store ITER 0)))
+    (! ITER 0)))
 
 (def dict_add ((name : (ptr byte)) (xt : int)) : void [nondet]
   (dict_check)
-  (let ((h (deref HERE)))
+  (let ((h (@ HERE)))
     
-    (store NAMEI 0)
-    (while (!= (deref8 (+ name (deref NAMEI))) 0)
-      (store8 (+ (+ h 6) (deref NAMEI)) (deref8 (+ name (deref NAMEI))))
-      (store NAMEI (+ (deref NAMEI) 1)))
-    (store8 (+ (+ h 6) (deref NAMEI)) 0)
+    (! NAMEI 0)
+    (while (!= (c@ (+ name (@ NAMEI))) 0)
+      (c! (+ (+ h 6) (@ NAMEI)) (c@ (+ name (@ NAMEI))))
+      (! NAMEI (+ (@ NAMEI) 1)))
+    (c! (+ (+ h 6) (@ NAMEI)) 0)
     
-    (store h (deref LATEST))            ; link
-    (store (+ h 2) (+ h 6))            ; name ptr -> copied string
-    (store (+ h 4) xt)                  ; xt
-    (store LATEST h)
+    (! h (@ LATEST))            ; link
+    (! (+ h 2) (+ h 6))            ; name ptr -> copied string
+    (! (+ h 4) xt)                  ; xt
+    (! LATEST h)
     
-    (store HERE (+ (+ h 7) (deref NAMEI)))))
+    (! HERE (+ (+ h 7) (@ NAMEI)))))
 
 (def dict_find ((name : (ptr byte))) : int [semidet]
-  (store WALKER (deref LATEST))
-  (store FOUND 0)
-  (while (if (!= (deref WALKER) 0) (= (deref FOUND) 0) (< 1 0))
-    (if (streq name (deref (+ (deref WALKER) 2)))
-      (store FOUND (deref (+ (deref WALKER) 4)))
-      (store WALKER (deref (deref WALKER)))))
-  (deref FOUND))
+  (! WALKER (@ LATEST))
+  (! FOUND 0)
+  (while (if (!= (@ WALKER) 0) (= (@ FOUND) 0) (< 1 0))
+    (if (streq name (@ (+ (@ WALKER) 2)))
+      (! FOUND (@ (+ (@ WALKER) 4)))
+      (! WALKER (@ (@ WALKER)))))
+  (@ FOUND))
 
 (def dict_words () : void [nondet]
-  (store ITER (deref LATEST))
-  (while (!= (deref ITER) 0)
-    (print_str (deref (+ (deref ITER) 2)))
+  (! ITER (@ LATEST))
+  (while (!= (@ ITER) 0)
+    (print_str (@ (+ (@ ITER) 2)))
     (emit 32)
-    (store ITER (deref (deref ITER))))
+    (! ITER (@ (@ ITER))))
   (emit 10))
 
 ;; ============================================================
@@ -146,18 +146,18 @@
 ;; ============================================================
 
 (def ds_init () : void [semidet]
-  (store DSP DSB))
+  (! DSP DSB))
 
 (def ds_push ((v : int)) : void [semidet]
-  (store (deref DSP) v)
-  (store DSP (+ (deref DSP) 2)))
+  (! (@ DSP) v)
+  (! DSP (+ (@ DSP) 2)))
 
 (def ds_pop () : int [semidet]
-  (store DSP (- (deref DSP) 2))
-  (deref (deref DSP)))
+  (! DSP (- (@ DSP) 2))
+  (@ (@ DSP)))
 
 (def ds_depth () : int [semidet]
-  (/ (- (deref DSP) DSB) 2))
+  (/ (- (@ DSP) DSB) 2))
 
 ;; print stack contents: <n> elem1 elem2 ... top
 (def ds_show () : void [nondet]
@@ -165,11 +165,11 @@
   (print_num (ds_depth))
   (emit 62)
   (emit 32)
-  (store ITER DSB)
-  (while (< (deref ITER) (deref DSP))
-    (print_num (deref (deref ITER)))
+  (! ITER DSB)
+  (while (< (@ ITER) (@ DSP))
+    (print_num (@ (@ ITER)))
     (emit 32)
-    (store ITER (+ (deref ITER) 2))))
+    (! ITER (+ (@ ITER) 2))))
 
 ;; ============================================================
 ;; input
@@ -177,44 +177,44 @@
 
 ;; read a line into LBUF, null-terminate, return length (-1 on EOF)
 (def read_line () : int [nondet]
-  (store ITER 0)
-  (while (do (store CHAR (key))
-             (if (= (deref CHAR) -1) (< 1 0)
-               (!= (deref CHAR) 10)))
-    (store8 (+ LBUF (deref ITER)) (deref CHAR))
-    (store ITER (+ (deref ITER) 1)))
-  (store8 (+ LBUF (deref ITER)) 0)
-  (if (if (= (deref CHAR) -1) (= (deref ITER) 0) (< 1 0))
+  (! ITER 0)
+  (while (do (! CHAR (key))
+             (if (= (@ CHAR) -1) (< 1 0)
+               (!= (@ CHAR) 10)))
+    (c! (+ LBUF (@ ITER)) (@ CHAR))
+    (! ITER (+ (@ ITER) 1)))
+  (c! (+ LBUF (@ ITER)) 0)
+  (if (if (= (@ CHAR) -1) (= (@ ITER) 0) (< 1 0))
     -1
-    (deref ITER)))
+    (@ ITER)))
 
 ;; ============================================================
 ;; tokenizer — walk LBUF extracting space-delimited words
 ;; ============================================================
 
 (def tok_init () : void [semidet]
-  (store LPOS 0))
+  (! LPOS 0))
 
 ;; skip spaces, copy next word into WBUF, null-terminate
 ;; returns word length (0 = end of line)
 (def tok_next () : int [semidet]
   ;; skip spaces
-  (while (= (deref8 (+ LBUF (deref LPOS))) 32)
-    (store LPOS (+ (deref LPOS) 1)))
+  (while (= (c@ (+ LBUF (@ LPOS))) 32)
+    (! LPOS (+ (@ LPOS) 1)))
   
-  (if (= (deref8 (+ LBUF (deref LPOS))) 0)
+  (if (= (c@ (+ LBUF (@ LPOS))) 0)
     0
     (do
       
-      (store ITER 0)
-      (while (if (!= (deref8 (+ LBUF (deref LPOS))) 0)
-               (!= (deref8 (+ LBUF (deref LPOS))) 32)
+      (! ITER 0)
+      (while (if (!= (c@ (+ LBUF (@ LPOS))) 0)
+               (!= (c@ (+ LBUF (@ LPOS))) 32)
                (< 1 0))
-        (store8 (+ WBUF (deref ITER)) (deref8 (+ LBUF (deref LPOS))))
-        (store ITER (+ (deref ITER) 1))
-        (store LPOS (+ (deref LPOS) 1)))
-      (store8 (+ WBUF (deref ITER)) 0)
-      (deref ITER))))
+        (c! (+ WBUF (@ ITER)) (c@ (+ LBUF (@ LPOS))))
+        (! ITER (+ (@ ITER) 1))
+        (! LPOS (+ (@ LPOS) 1)))
+      (c! (+ WBUF (@ ITER)) 0)
+      (@ ITER))))
 
 ;; ============================================================
 ;; number parsing
@@ -224,28 +224,28 @@
 ;; returns true if success (result in PN_ACC), false if not a number
 ;; uses: PN_POS, PN_SIGN, PN_ACC, PN_OK; calls mul
 (def parse_num () : bool [semidet]
-  (store PN_POS 0)
-  (store PN_SIGN 1)
-  (store PN_ACC 0)
+  (! PN_POS 0)
+  (! PN_SIGN 1)
+  (! PN_ACC 0)
   ;; optional leading minus
-  (if (= (deref8 WBUF) 45)
-    (do (store PN_SIGN -1) (store PN_POS 1))
-    (store PN_ACC 0))
+  (if (= (c@ WBUF) 45)
+    (do (! PN_SIGN -1) (! PN_POS 1))
+    (! PN_ACC 0))
   
-  (if (= (deref8 (+ WBUF (deref PN_POS))) 0)
+  (if (= (c@ (+ WBUF (@ PN_POS))) 0)
     (< 1 0)
     (do
-      (store PN_OK 1)
-      (while (if (!= (deref8 (+ WBUF (deref PN_POS))) 0)
-               (= (deref PN_OK) 1) (< 1 0))
-        (let ((c (deref8 (+ WBUF (deref PN_POS)))))
+      (! PN_OK 1)
+      (while (if (!= (c@ (+ WBUF (@ PN_POS))) 0)
+               (= (@ PN_OK) 1) (< 1 0))
+        (let ((c (c@ (+ WBUF (@ PN_POS)))))
           (if (if (< 47 c) (< c 58) (< 1 0))
             (do
-              (store PN_ACC (+ (* (deref PN_ACC) 10) (- c 48)))
-              (store PN_POS (+ (deref PN_POS) 1)))
-            (store PN_OK 0))))
-      (if (= (deref PN_OK) 1)
-        (do (store PN_ACC (* (deref PN_ACC) (deref PN_SIGN)))
+              (! PN_ACC (+ (* (@ PN_ACC) 10) (- c 48)))
+              (! PN_POS (+ (@ PN_POS) 1)))
+            (! PN_OK 0))))
+      (if (= (@ PN_OK) 1)
+        (do (! PN_ACC (* (@ PN_ACC) (@ PN_SIGN)))
             (< 0 1))
         (< 1 0)))))
 
@@ -255,29 +255,29 @@
 
 ;; emit a cell to HERE, advance HERE by 2
 (def emit_cell ((v : int)) : void [semidet]
-  (store (deref HERE) v)
-  (store HERE (+ (deref HERE) 2)))
+  (! (@ HERE) v)
+  (! HERE (+ (@ HERE) 2)))
 
 ;; copy WBUF to CNAME
 (def save_name () : void [semidet]
-  (store STRI 0)
-  (while (!= (deref8 (+ WBUF (deref STRI))) 0)
-    (store8 (+ CNAME (deref STRI)) (deref8 (+ WBUF (deref STRI))))
-    (store STRI (+ (deref STRI) 1)))
-  (store8 (+ CNAME (deref STRI)) 0))
+  (! STRI 0)
+  (while (!= (c@ (+ WBUF (@ STRI))) 0)
+    (c! (+ CNAME (@ STRI)) (c@ (+ WBUF (@ STRI))))
+    (! STRI (+ (@ STRI) 1)))
+  (c! (+ CNAME (@ STRI)) 0))
 
 ;; : — start a colon definition
 (def f_colon () : void [semidet]
   (tok_next)        ; read name token
   (save_name)       ; save it
-  (store CSTART (deref HERE))  ; mark code start
-  (store STATE 1))  ; enter compile mode
+  (! CSTART (@ HERE))  ; mark code start
+  (! STATE 1))  ; enter compile mode
 
 ;; ; — end a colon definition (immediate)
 (def f_semi () : void [nondet]
   (emit_cell ($op ret))    ; emit RET opcode
-  (dict_add CNAME (deref CSTART))
-  (store STATE 0))  ; back to interpret mode
+  (dict_add CNAME (@ CSTART))
+  (! STATE 0))  ; back to interpret mode
 
 (def f_dot () : void [nondet]
   (print_num (ds_pop)) (emit 32))
@@ -304,7 +304,7 @@
   (let ((b (ds_pop))) (let ((a (ds_pop))) (ds_push b) (ds_push a))))
 
 (def f_drop () : void [semidet]
-  (ds_pop) (store ITER 0))
+  (ds_pop) (! ITER 0))
 
 (def f_over () : void [semidet]
   (let ((b (ds_pop))) (let ((a (ds_pop))) (ds_push a) (ds_push b) (ds_push a))))
@@ -355,12 +355,12 @@
   (bye))
 
 (def f_fetch () : void [semidet]
-  (ds_push (deref (ds_pop))))
+  (ds_push (@ (ds_pop))))
 
 (def f_store () : void [semidet]
   (let ((addr (ds_pop)))
     (let ((val (ds_pop)))
-      (store addr val))))
+      (! addr val))))
 
 (def f_2dup () : void [semidet]
   (let ((b (ds_pop)))
@@ -368,15 +368,15 @@
       (ds_push a) (ds_push b) (ds_push a) (ds_push b))))
 
 (def f_2drop () : void [semidet]
-  (ds_pop) (ds_pop) (store ITER 0))
+  (ds_pop) (ds_pop) (! ITER 0))
 
 (def f_variable () : void [nondet]
   (tok_next)
   (save_name)
-  (let ((data_addr (deref HERE)))
-    (store HERE (+ (deref HERE) 2))
-    (store data_addr 0)
-    (let ((stub (deref HERE)))
+  (let ((data_addr (@ HERE)))
+    (! HERE (+ (@ HERE) 2))
+    (! data_addr 0)
+    (let ((stub (@ HERE)))
       (emit_cell ($op lit))
       (emit_cell data_addr)
       (emit_cell ($op call))
@@ -388,7 +388,7 @@
   (tok_next)
   (save_name)
   (let ((val (ds_pop)))
-    (let ((stub (deref HERE)))
+    (let ((stub (@ HERE)))
       (emit_cell ($op lit))
       (emit_cell val)
       (emit_cell ($op call))
@@ -405,21 +405,21 @@
   (emit_cell (addr ds_pop))
   (emit_cell ($op zbranch))
   (emit_cell 0)
-  (ds_push (- (deref HERE) 2)))
+  (ds_push (- (@ HERE) 2)))
 
 (def f_then () : void [semidet]
-  (store (ds_pop) (deref HERE)))
+  (! (ds_pop) (@ HERE)))
 
 (def f_else () : void [semidet]
   (emit_cell ($op branch))
   (emit_cell 0)
-  (let ((new_patch (- (deref HERE) 2)))
+  (let ((new_patch (- (@ HERE) 2)))
     (let ((old_patch (ds_pop)))
-      (store old_patch (deref HERE))
+      (! old_patch (@ HERE))
       (ds_push new_patch))))
 
 (def f_begin () : void [semidet]
-  (ds_push (deref HERE)))
+  (ds_push (@ HERE)))
 
 (def f_until () : void [semidet]
   (emit_cell ($op call))
@@ -432,14 +432,14 @@
   (emit_cell (addr ds_pop))
   (emit_cell ($op zbranch))
   (emit_cell 0)
-  (ds_push (- (deref HERE) 2)))
+  (ds_push (- (@ HERE) 2)))
 
 (def f_repeat () : void [semidet]
   (let ((patch (ds_pop)))
     (let ((begin_addr (ds_pop)))
       (emit_cell ($op branch))
       (emit_cell begin_addr)
-      (store patch (deref HERE)))))
+      (! patch (@ HERE)))))
 
 (def f_again () : void [semidet]
   (emit_cell ($op branch))
@@ -447,20 +447,20 @@
 
 (def f_recurse () : void [semidet]
   (emit_cell ($op call))
-  (emit_cell (deref CSTART)))
+  (emit_cell (@ CSTART)))
 
 ;; ============================================================
 ;; interpret one word (in WBUF)
 ;; ============================================================
 
 (def interpret_word () : void [nondet]
-  (if (= (deref STATE) 0)
+  (if (= (@ STATE) 0)
     ;; --- interpret mode ---
     (let ((xt (dict_find WBUF)))
       (if (!= xt 0)
         (execute xt)
         (if (parse_num)
-          (ds_push (deref PN_ACC))
+          (ds_push (@ PN_ACC))
           (do (print_str WBUF) (print_str " ?") (emit 10)))))
     ;; --- compile mode ---
     (if (streq WBUF ";")       (f_semi)
@@ -477,7 +477,7 @@
         (if (!= xt 0)
           (do (emit_cell ($op call)) (emit_cell xt))
           (if (parse_num)
-            (do (emit_cell ($op lit)) (emit_cell (deref PN_ACC))
+            (do (emit_cell ($op lit)) (emit_cell (@ PN_ACC))
                 (emit_cell ($op call)) (emit_cell (addr ds_push)))
             (do (print_str WBUF) (print_str " ?") (emit 10)))))))))))))))))
 
@@ -545,11 +545,11 @@
       (if (= len -1) (do (print_str "got eof, exiting...") (emit 10) (bye))
         (if (< 0 len)
           (do
-            (store THROWN 0)
+            (! THROWN 0)
             (run_line)
-            (if (= (deref THROWN) 0)
+            (if (= (@ THROWN) 0)
               (do (print_str " ok") (emit 10))
               (do (print_str "error: ")
-                  (print_num (deref THROWN))
+                  (print_num (@ THROWN))
                   (emit 10))))
-          (store ITER 0))))))
+          (! ITER 0))))))

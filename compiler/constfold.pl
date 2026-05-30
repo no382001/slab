@@ -68,14 +68,14 @@ fold_expr(DetFns, while(Cond, Body), while(FCond, FBody)) :-
     fold_expr(DetFns, Cond, FCond),
     maplist(fold_expr(DetFns), Body, FBody).
 
-fold_expr(DetFns, deref(E), deref(FE)) :-
+fold_expr(DetFns, '@'(E), '@'(FE)) :-
     fold_expr(DetFns, E, FE).
-fold_expr(DetFns, deref8(E), deref8(FE)) :-
+fold_expr(DetFns, 'c@'(E), 'c@'(FE)) :-
     fold_expr(DetFns, E, FE).
-fold_expr(DetFns, store(A, V), store(FA, FV)) :-
+fold_expr(DetFns, '!'(A, V), '!'(FA, FV)) :-
     fold_expr(DetFns, A, FA),
     fold_expr(DetFns, V, FV).
-fold_expr(DetFns, store8(A, V), store8(FA, FV)) :-
+fold_expr(DetFns, 'c!'(A, V), 'c!'(FA, FV)) :-
     fold_expr(DetFns, A, FA),
     fold_expr(DetFns, V, FV).
 fold_expr(DetFns, execute(E), execute(FE)) :-

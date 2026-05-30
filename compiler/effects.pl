@@ -78,18 +78,18 @@ infer_expr_effect(str(_), _, det).
 infer_expr_effect(var(_), _, det).
 
 %% memory operations -> semidet
-infer_expr_effect(deref(E), Env, Eff) :-
+infer_expr_effect('@'(E), Env, Eff) :-
     infer_expr_effect(E, Env, ChildEff),
     effect_join(semidet, ChildEff, Eff).
-infer_expr_effect(deref8(E), Env, Eff) :-
+infer_expr_effect('c@'(E), Env, Eff) :-
     infer_expr_effect(E, Env, ChildEff),
     effect_join(semidet, ChildEff, Eff).
-infer_expr_effect(store(A, V), Env, Eff) :-
+infer_expr_effect('!'(A, V), Env, Eff) :-
     infer_expr_effect(A, Env, EA),
     infer_expr_effect(V, Env, EV),
     effect_join(EA, EV, EArgs),
     effect_join(semidet, EArgs, Eff).
-infer_expr_effect(store8(A, V), Env, Eff) :-
+infer_expr_effect('c!'(A, V), Env, Eff) :-
     infer_expr_effect(A, Env, EA),
     infer_expr_effect(V, Env, EV),
     effect_join(EA, EV, EArgs),

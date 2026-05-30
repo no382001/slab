@@ -210,11 +210,12 @@ static_assert(dispatch[RPICK].code == RPICK, "dispatch table out of order");
 
 auto run(vm &v) -> void {
   static const void *dtable[OP_COUNT] = {
-      &&do_nop,     &&do_lit,    &&do_load, &&do_store,   &&do_loadb,  &&do_storeb,
-      &&do_drop,    &&do_dup,    &&do_swap, &&do_over,    &&do_tor,    &&do_fromr,
-      &&do_rfetch,  &&do_rpick,  &&do_add,  &&do_sub,     &&do_mul,    &&do_div,
-      &&do_mod,     &&do_and,    &&do_or,   &&do_xor,     &&do_eq,     &&do_lt,
-      &&do_branch,  &&do_zbranch,&&do_call, &&do_ret,     &&do_execute,&&do_trap,
+      &&do_nop,     &&do_lit,   &&do_load,   &&do_store,   &&do_loadb,
+      &&do_storeb,  &&do_drop,  &&do_dup,    &&do_swap,    &&do_over,
+      &&do_tor,     &&do_fromr, &&do_rfetch, &&do_rpick,   &&do_add,
+      &&do_sub,     &&do_mul,   &&do_div,    &&do_mod,     &&do_and,
+      &&do_or,      &&do_xor,   &&do_eq,     &&do_lt,      &&do_branch,
+      &&do_zbranch, &&do_call,  &&do_ret,    &&do_execute, &&do_trap,
   };
   static_assert(OP_COUNT == 30, "update dtable");
 

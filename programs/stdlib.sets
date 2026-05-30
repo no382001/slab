@@ -9,20 +9,20 @@
 ($alloc THROW_RP 2)    ; temp: target RP saved before let cleanup in f_throw
 
 (def catch_init () : void [semidet]
-  (store CF_SP 0)
-  (store THROWN 0))
+  (! CF_SP 0)
+  (! THROWN 0))
 
 ;; push a catch frame — saves VM RP and Forth DSP
 ;; Save RP-1 (skipping catch_push's own return addr) so that when throw
 ;; restores RP and RETs it pops the *caller's* return addr.
 (def catch_push () : void [semidet]
-  (store (+ CF_BASE (deref CF_SP)) (- (deref VM_RP) 1))
-  (store (+ CF_BASE (+ (deref CF_SP) 2)) (deref DSP))
-  (store CF_SP (+ (deref CF_SP) 4)))
+  (! (+ CF_BASE (@ CF_SP)) (- (@ VM_RP) 1))
+  (! (+ CF_BASE (+ (@ CF_SP) 2)) (@ DSP))
+  (! CF_SP (+ (@ CF_SP) 4)))
 
 ;; pop a catch frame (normal return path)
 (def catch_pop () : void [semidet]
-  (store CF_SP (- (deref CF_SP) 4)))
+  (! CF_SP (- (@ CF_SP) 4)))
 
 ;; throw — restore state to most recent catch frame and unwind
 ;; ( error-code -- )
@@ -31,14 +31,14 @@
 ;; the catch site.
 (def f_throw () : void [nondet]
   (let ((code (ds_pop)))
-    (if (= (deref CF_SP) 0)
+    (if (= (@ CF_SP) 0)
       (do (print_str "uncaught throw: ")
           (print_num code)
           (emit 10)
           (bye))
-      (let ((off (- (deref CF_SP) 4)))
-        (store THROWN code)
-        (store CF_SP off)
-        (store DSP (deref (+ CF_BASE (+ off 2))))
-        (store THROW_RP (deref (+ CF_BASE off))))))
-  (store VM_RP (deref THROW_RP)))
+      (let ((off (- (@ CF_SP) 4)))
+        (! THROWN code)
+        (! CF_SP off)
+        (! DSP (@ (+ CF_BASE (+ off 2))))
+        (! THROW_RP (@ (+ CF_BASE off))))))
+  (! VM_RP (@ THROW_RP)))

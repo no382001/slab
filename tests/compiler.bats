@@ -38,13 +38,13 @@ setup() {
   [[ "$result" == ok* ]]
 }
 
-@test "typecheck: pointer deref" {
-  result="$(compile '(def f ((p : (ptr int))) : int (deref p))' typed)"
+@test "typecheck: pointer @" {
+  result="$(compile '(def f ((p : (ptr int))) : int (@ p))' typed)"
   [[ "$result" == ok* ]]
 }
 
-@test "typecheck: pointer store" {
-  result="$(compile '(def f ((p : (ptr int)) (v : int)) : void (store p v))' typed)"
+@test "typecheck: pointer !" {
+  result="$(compile '(def f ((p : (ptr int)) (v : int)) : void (! p v))' typed)"
   [[ "$result" == ok* ]]
 }
 
@@ -64,22 +64,22 @@ setup() {
 }
 
 @test "typecheck: string literal is ptr(byte)" {
-  result="$(compile '(def f () : int (deref8 "hi"))' typed)"
+  result="$(compile '(def f () : int (c@ "hi"))' typed)"
   [[ "$result" == ok* ]]
 }
 
 @test "typecheck: int and ptr compatible" {
-  result="$(compile '(def f ((a : int)) : int (deref8 a))' typed)"
+  result="$(compile '(def f ((a : int)) : int (c@ a))' typed)"
   [[ "$result" == ok* ]]
 }
 
-@test "typecheck: deref8 on int address" {
-  result="$(compile '(const BUF int 1024) (def f () : byte (deref8 BUF))' typed)"
+@test "typecheck: c@ on int address" {
+  result="$(compile '(const BUF int 1024) (def f () : byte (c@ BUF))' typed)"
   [[ "$result" == ok* ]]
 }
 
-@test "typecheck: store8 with int address" {
-  result="$(compile '(const BUF int 1024) (def f () : void (store8 BUF 0))' typed)"
+@test "typecheck: c! with int address" {
+  result="$(compile '(const BUF int 1024) (def f () : void (c! BUF 0))' typed)"
   [[ "$result" == ok* ]]
 }
 
@@ -104,7 +104,7 @@ setup() {
 }
 
 @test "typecheck: string arg to ptr(byte) param" {
-  result="$(compile '(def f ((s : (ptr byte))) : byte (deref8 s)) (def main () : void (f "hi") (bye))' typed)"
+  result="$(compile '(def f ((s : (ptr byte))) : byte (c@ s)) (def main () : void (f "hi") (bye))' typed)"
   [[ "$result" == ok* ]]
 }
 
@@ -182,18 +182,18 @@ setup() {
 }
 
 @test "e2e: while loop" {
-  run run_program '(const I int 1024) (def main () : void (store I 65) (while (< (deref I) 68) (emit (deref I)) (store I (+ (deref I) 1))) (bye))'
+  run run_program '(const I int 1024) (def main () : void (! I 65) (while (< (@ I) 68) (emit (@ I)) (! I (+ (@ I) 1))) (bye))'
   [ "$output" = "ABC" ]
 }
 
 @test "e2e: string literal first byte" {
-  run run_program '(def main () : void (emit (deref8 "Hello")) (bye))'
+  run run_program '(def main () : void (emit (c@ "Hello")) (bye))'
   [ "$output" = "H" ]
 }
 
 @test "e2e: echo program" {
   run run_program \
-    '(const BUF int 1028) (const I int 1026) (const C int 1024) (def main () : void (store I 0) (while (do (store C (key)) (!= (deref C) 10)) (store8 (+ BUF (deref I)) (deref C)) (store I (+ (deref I) 1))) (store8 (+ BUF (deref I)) 0) (store I 0) (while (!= (deref8 (+ BUF (deref I))) 0) (emit (deref8 (+ BUF (deref I)))) (store I (+ (deref I) 1))) (bye))' \
+    '(const BUF int 1028) (const I int 1026) (const C int 1024) (def main () : void (! I 0) (while (do (! C (key)) (!= (@ C) 10)) (c! (+ BUF (@ I)) (@ C)) (! I (+ (@ I) 1))) (c! (+ BUF (@ I)) 0) (! I 0) (while (!= (c@ (+ BUF (@ I))) 0) (emit (c@ (+ BUF (@ I)))) (! I (+ (@ I) 1))) (bye))' \
     $'hello\n'
   [ "$output" = "hello" ]
 }
@@ -209,7 +209,7 @@ setup() {
 }
 
 @test "e2e: ptr(byte) param with string literal" {
-  run run_program '(def first ((s : (ptr byte))) : byte (deref8 s)) (def main () : void (emit (first "Zap")) (bye))'
+  run run_program '(def first ((s : (ptr byte))) : byte (c@ s)) (def main () : void (emit (first "Zap")) (bye))'
   [ "$output" = "Z" ]
 }
 
@@ -274,8 +274,8 @@ setup() {
   prog='($section 1000)
 ($alloc X 2)
 (def main () : void
-  (store X ($vm-sp))
-  (if (!= (deref X) 0) (emit 89) (emit 78))
+  (! X ($vm-sp))
+  (if (!= (@ X) 0) (emit 89) (emit 78))
   (bye))'
   run run_program "$prog"
   [ "$output" = "Y" ]
@@ -305,23 +305,23 @@ setup() {
   [[ "$result" == *"eff(f,nondet)"* ]]
 }
 
-@test "effects: deref is semidet" {
-  result="$(compile '(def f ((p : (ptr int))) : int (deref p))' effects)"
+@test "effects: @ is semidet" {
+  result="$(compile '(def f ((p : (ptr int))) : int (@ p))' effects)"
   [[ "$result" == *"eff(f,semidet)"* ]]
 }
 
-@test "effects: deref8 is semidet" {
-  result="$(compile '(def f ((p : (ptr byte))) : byte (deref8 p))' effects)"
+@test "effects: c@ is semidet" {
+  result="$(compile '(def f ((p : (ptr byte))) : byte (c@ p))' effects)"
   [[ "$result" == *"eff(f,semidet)"* ]]
 }
 
-@test "effects: store is semidet" {
-  result="$(compile '(def f ((p : (ptr int)) (v : int)) : void (store p v))' effects)"
+@test "effects: ! is semidet" {
+  result="$(compile '(def f ((p : (ptr int)) (v : int)) : void (! p v))' effects)"
   [[ "$result" == *"eff(f,semidet)"* ]]
 }
 
-@test "effects: store8 is semidet" {
-  result="$(compile '(def f ((p : (ptr byte)) (v : byte)) : void (store8 p v))' effects)"
+@test "effects: c! is semidet" {
+  result="$(compile '(def f ((p : (ptr byte)) (v : byte)) : void (c! p v))' effects)"
   [[ "$result" == *"eff(f,semidet)"* ]]
 }
 
@@ -337,7 +337,7 @@ setup() {
 }
 
 @test "effects: semidet caller of det callee stays semidet" {
-  result="$(compile '(def inc ((x : int)) : int (+ x 1)) (def f ((p : (ptr int))) : void (store p (inc 5)))' effects)"
+  result="$(compile '(def inc ((x : int)) : int (+ x 1)) (def f ((p : (ptr int))) : void (! p (inc 5)))' effects)"
   [[ "$result" == *"eff(inc,det)"* ]]
   [[ "$result" == *"eff(f,semidet)"* ]]
 }
@@ -360,12 +360,12 @@ setup() {
 }
 
 @test "effects: do block joins children" {
-  result="$(compile '(def f ((p : (ptr int))) : int (do (store p 1) (deref p)))' effects)"
+  result="$(compile '(def f ((p : (ptr int))) : int (do (! p 1) (@ p)))' effects)"
   [[ "$result" == *"eff(f,semidet)"* ]]
 }
 
 @test "effects: while with semidet body is semidet" {
-  result="$(compile '(const I int 1024) (def f () : void (while (< (deref I) 10) (store I (+ (deref I) 1))))' effects)"
+  result="$(compile '(const I int 1024) (def f () : void (while (< (@ I) 10) (! I (+ (@ I) 1))))' effects)"
   [[ "$result" == *"eff(f,semidet)"* ]]
 }
 
@@ -379,7 +379,7 @@ setup() {
 }
 
 @test "effects annotation: semidet accepted on memory fn" {
-  result="$(compile '(def f ((p : (ptr int))) : int [semidet] (deref p))' effects)"
+  result="$(compile '(def f ((p : (ptr int))) : int [semidet] (@ p))' effects)"
   [[ "$result" == ok* ]]
 }
 
@@ -399,7 +399,7 @@ setup() {
 }
 
 @test "effects annotation rejects: det on semidet fn" {
-  result="$(compile '(def f ((p : (ptr int))) : int [det] (deref p))' binary)"
+  result="$(compile '(def f ((p : (ptr int))) : int [det] (@ p))' binary)"
   [[ "$result" == *"declared [det] but inferred semidet"* ]]
 }
 
@@ -413,18 +413,18 @@ setup() {
   [[ "$result" == ok* ]]
 }
 
-@test "effects annotation rejects: det on store" {
-  result="$(compile '(def f ((p : (ptr int))) : void [det] (store p 1))' binary)"
+@test "effects annotation rejects: det on !" {
+  result="$(compile '(def f ((p : (ptr int))) : void [det] (! p 1))' binary)"
   [[ "$result" == *"declared [det] but inferred semidet"* ]]
 }
 
-@test "effects annotation rejects: det on store8" {
-  result="$(compile '(def f ((p : (ptr byte))) : void [det] (store8 p 0))' binary)"
+@test "effects annotation rejects: det on c!" {
+  result="$(compile '(def f ((p : (ptr byte))) : void [det] (c! p 0))' binary)"
   [[ "$result" == *"declared [det] but inferred semidet"* ]]
 }
 
-@test "effects annotation rejects: det on deref8" {
-  result="$(compile '(def f ((p : (ptr byte))) : byte [det] (deref8 p))' binary)"
+@test "effects annotation rejects: det on c@" {
+  result="$(compile '(def f ((p : (ptr byte))) : byte [det] (c@ p))' binary)"
   [[ "$result" == *"declared [det] but inferred semidet"* ]]
 }
 
@@ -454,7 +454,7 @@ setup() {
 }
 
 @test "effects annotation rejects: transitive semidet via call" {
-  result="$(compile '(const P int 1024) (def rd () : int (deref P)) (def f () : int [det] (rd))' binary)"
+  result="$(compile '(const P int 1024) (def rd () : int (@ P)) (def f () : int [det] (rd))' binary)"
   [[ "$result" == *"declared [det] but inferred semidet"* ]]
 }
 
@@ -552,8 +552,8 @@ setup() {
 }
 
 @test "constfold: semidet function not folded" {
-  result="$(compile '(const P int 1024) (def f () : int (deref P)) (def main () : void (emit (f)) (bye))' ir)"
-  # deref is semidet, should not be folded
+  result="$(compile '(const P int 1024) (def f () : int (@ P)) (def main () : void (emit (f)) (bye))' ir)"
+  # @ is semidet, should not be folded
   [[ "$result" == *"label(f)"* ]]
 }
 

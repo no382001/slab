@@ -160,25 +160,25 @@ infer(Env, FEnv, while(Cond, Body), void) :-
     infer(Env, FEnv, Cond, bool),
     infer_body(Body, Env, FEnv, _).
 
-%% deref: ptr(T) -> T, or int -> int (raw address)
-infer(Env, FEnv, deref(E), T) :-
+%% '@': ptr(T) -> T, or int -> int (raw address)
+infer(Env, FEnv, '@'(E), T) :-
     infer(Env, FEnv, E, ET),
     (ET = ptr(T) ; (numeric_type(ET), T = int)).
 
-%% deref8: ptr(byte)|int -> byte
-infer(Env, FEnv, deref8(E), byte) :-
+%% 'c@': ptr(byte)|int -> byte
+infer(Env, FEnv, 'c@'(E), byte) :-
     infer(Env, FEnv, E, ET),
     (ET = ptr(byte) ; numeric_type(ET)).
 
-%% store: ptr(T) × T -> void, or int addr
-infer(Env, FEnv, store(Addr, Val), void) :-
+%% '!': ptr(T) × T -> void, or int addr
+infer(Env, FEnv, '!'(Addr, Val), void) :-
     infer(Env, FEnv, Addr, AT),
     (AT = ptr(T) ; (numeric_type(AT), T = int)),
     infer(Env, FEnv, Val, VT),
     types_compatible(T, VT).
 
-%% store8: ptr(byte)|int × numeric -> void
-infer(Env, FEnv, store8(Addr, Val), void) :-
+%% 'c!': ptr(byte)|int × numeric -> void
+infer(Env, FEnv, 'c!'(Addr, Val), void) :-
     infer(Env, FEnv, Addr, AT),
     (AT = ptr(byte) ; numeric_type(AT)),
     infer(Env, FEnv, Val, VT),
@@ -320,10 +320,10 @@ pipeline(Src, Result) :-
    true.
 
 %% pointers
-?- pipeline("(def f ((p : (ptr int))) : int (deref p))", ok(_)).
+?- pipeline("(def f ((p : (ptr int))) : int (@ p))", ok(_)).
    true.
 
-?- pipeline("(def f ((p : (ptr int)) (v : int)) : void (store p v))", ok(_)).
+?- pipeline("(def f ((p : (ptr int)) (v : int)) : void (! p v))", ok(_)).
    true.
 
 %% extern

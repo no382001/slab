@@ -29,54 +29,54 @@
 
 ;; compare two null-terminated byte strings
 (def streq ((a : (ptr byte)) (b : (ptr byte))) : bool
-  (store STRI 0)
-  (while (if (= (deref8 (+ a (deref STRI))) (deref8 (+ b (deref STRI))))
-           (!= (deref8 (+ a (deref STRI))) 0)
+  (! STRI 0)
+  (while (if (= (c@ (+ a (@ STRI))) (c@ (+ b (@ STRI))))
+           (!= (c@ (+ a (@ STRI))) 0)
            (< 1 0))
-    (store STRI (+ (deref STRI) 1)))
-  (= (deref8 (+ a (deref STRI))) (deref8 (+ b (deref STRI)))))
+    (! STRI (+ (@ STRI) 1)))
+  (= (c@ (+ a (@ STRI))) (c@ (+ b (@ STRI)))))
 
 ;; print null-terminated string
 (def print_str ((s : (ptr byte))) : void
-  (store PRINTI 0)
-  (while (!= (deref8 (+ s (deref PRINTI))) 0)
-    (emit (deref8 (+ s (deref PRINTI))))
-    (store PRINTI (+ (deref PRINTI) 1))))
+  (! PRINTI 0)
+  (while (!= (c@ (+ s (@ PRINTI))) 0)
+    (emit (c@ (+ s (@ PRINTI))))
+    (! PRINTI (+ (@ PRINTI) 1))))
 
 ;; ============================================================
 ;; dictionary
 ;; ============================================================
 
 (def dict_init () : void
-  (store LATEST 0)
-  (store HERE HEAP))
+  (! LATEST 0)
+  (! HERE HEAP))
 
 ;; add entry: link=LATEST, name ptr, xt; update LATEST and HERE
 (def dict_add ((name : (ptr byte)) (xt : int)) : void
-  (let ((h (deref HERE)))
-    (store h (deref LATEST))
-    (store (+ h 2) name)
-    (store (+ h 4) xt)
-    (store LATEST h)
-    (store HERE (+ h 6))))
+  (let ((h (@ HERE)))
+    (! h (@ LATEST))
+    (! (+ h 2) name)
+    (! (+ h 4) xt)
+    (! LATEST h)
+    (! HERE (+ h 6))))
 
 ;; find word in dictionary, return xt or 0
 (def dict_find ((name : (ptr byte))) : int
-  (store WALKER (deref LATEST))
-  (store FOUND 0)
-  (while (if (!= (deref WALKER) 0) (= (deref FOUND) 0) (< 1 0))
-    (if (streq name (deref (+ (deref WALKER) 2)))
-      (store FOUND (deref (+ (deref WALKER) 4)))
-      (store WALKER (deref (deref WALKER)))))
-  (deref FOUND))
+  (! WALKER (@ LATEST))
+  (! FOUND 0)
+  (while (if (!= (@ WALKER) 0) (= (@ FOUND) 0) (< 1 0))
+    (if (streq name (@ (+ (@ WALKER) 2)))
+      (! FOUND (@ (+ (@ WALKER) 4)))
+      (! WALKER (@ (@ WALKER)))))
+  (@ FOUND))
 
 ;; print all words in dictionary
 (def dict_words () : void
-  (store ITER (deref LATEST))
-  (while (!= (deref ITER) 0)
-    (print_str (deref (+ (deref ITER) 2)))
+  (! ITER (@ LATEST))
+  (while (!= (@ ITER) 0)
+    (print_str (@ (+ (@ ITER) 2)))
     (emit 32)
-    (store ITER (deref (deref ITER))))
+    (! ITER (@ (@ ITER))))
   (emit 10))
 
 ;; ============================================================
@@ -85,16 +85,16 @@
 
 ;; read a line into BUF, null-terminate, return length (-1 on EOF)
 (def read_line () : int
-  (store LINEI 0)
-  (while (do (store CHAR (key))
-             (if (= (deref CHAR) -1) (< 1 0)
-               (!= (deref CHAR) 10)))
-    (store8 (+ BUF (deref LINEI)) (deref CHAR))
-    (store LINEI (+ (deref LINEI) 1)))
-  (store8 (+ BUF (deref LINEI)) 0)
-  (if (if (= (deref CHAR) -1) (= (deref LINEI) 0) (< 1 0))
+  (! LINEI 0)
+  (while (do (! CHAR (key))
+             (if (= (@ CHAR) -1) (< 1 0)
+               (!= (@ CHAR) 10)))
+    (c! (+ BUF (@ LINEI)) (@ CHAR))
+    (! LINEI (+ (@ LINEI) 1)))
+  (c! (+ BUF (@ LINEI)) 0)
+  (if (if (= (@ CHAR) -1) (= (@ LINEI) 0) (< 1 0))
     -1
-    (deref LINEI)))
+    (@ LINEI)))
 
 ;; ============================================================
 ;; dispatch — execute a word by its xt
@@ -109,7 +109,7 @@
   (if (= xt 1) (bye)
     (if (= xt 2) (do (print_str "Hello!") (emit 10))
       (if (= xt 3) (dict_words)
-        (store PRINTI 0)))))
+        (! PRINTI 0)))))
 
 ;; ============================================================
 ;; main
@@ -127,9 +127,9 @@
   (while (< 0 1)
     (let ((len (read_line)))
       (if (= len -1) (bye)
-        (if (!= (deref8 BUF) 0)
+        (if (!= (c@ BUF) 0)
           (let ((xt (dict_find BUF)))
             (if (= xt 0)
               (do (print_str BUF) (print_str " ?") (emit 10))
               (dispatch xt)))
-          (store PRINTI 0))))))
+          (! PRINTI 0))))))

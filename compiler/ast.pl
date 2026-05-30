@@ -75,21 +75,21 @@ transform(list([sym(addr), sym(Name)]), addr(Name)).
 transform(list([sym(execute), E]), execute(TE)) :-
     transform(E, TE).
 
-%% (deref expr)
-transform(list([sym(deref), E]), deref(TE)) :-
+%% (@ expr) — '@' cell
+transform(list([sym('@'), E]), '@'(TE)) :-
     transform(E, TE).
 
-%% (deref8 expr) — byte-level read
-transform(list([sym(deref8), E]), deref8(TE)) :-
+%% (c@ expr) — '@' byte
+transform(list([sym('c@'), E]), 'c@'(TE)) :-
     transform(E, TE).
 
-%% (store addr val)
-transform(list([sym(store), A, V]), store(TA, TV)) :-
+%% (! addr val) — '!' cell
+transform(list([sym('!'), A, V]), '!'(TA, TV)) :-
     transform(A, TA),
     transform(V, TV).
 
-%% (store8 addr val)
-transform(list([sym(store8), A, V]), store8(TA, TV)) :-
+%% (c! addr val) — '!' byte
+transform(list([sym('c!'), A, V]), 'c!'(TA, TV)) :-
     transform(A, TA),
     transform(V, TV).
 
@@ -145,8 +145,8 @@ binop('!='). binop(<=). binop(>=).
 
 reserved(def). reserved(let). reserved(if). reserved(do).
 reserved(while). reserved(const). reserved(extern).
-reserved(deref). reserved(store). reserved(store8).
-reserved(addr). reserved(execute). reserved(deref8).
+reserved('@'). reserved('c@'). reserved('!'). reserved('c!').
+reserved(addr). reserved(execute).
 reserved('$include').
 
 syms_to_names([], []).

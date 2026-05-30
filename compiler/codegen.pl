@@ -101,8 +101,7 @@ compile_body([E | Rest], Env, Consts, LN0, RD, Code, LN) :-
     append(ECode, DropCode, ECodeD),
     append(ECodeD, RestCode, Code).
 
-void_expr(store(_, _)).
-void_expr(store8(_, _)).
+void_expr(Expr) :- Expr =.. [Op, _, _], member(Op, ['!', 'c!']).
 void_expr(while(_, _)).
 void_expr(execute(_)).
 void_expr(call(Name, _)) :- builtin_trap(Name, void, _).
@@ -131,7 +130,7 @@ compile_expr(str(Chars), _, _, LN0, _, Code, LN) :-
     append([branch(EndL), label(DataL) | DataWithNull],
            [label(EndL), lit_label(DataL)], Code).
 
-%% variable: load from rack slot or memory slot
+%% variable: '@' from rack slot or memory slot
 compile_expr(var(Name), Env, Consts, LN, RD, Code, LN) :-
     ( member(rvar(Name, Pos), Env) ->
         Depth is RD - 1 - Pos,
@@ -186,29 +185,21 @@ compile_expr(while(Cond, Body), Env, Consts, LN0, RD, Code, LN) :-
     append(C1, BC, C2),
     append(C2, [branch(StartL), label(EndL)], Code).
 
-%% deref
-compile_expr(deref(E), Env, Consts, LN0, RD, Code, LN) :-
+%% load: '@' and 'c@' — op name is the functor
+compile_expr(Expr, Env, Consts, LN0, RD, Code, LN) :-
+    Expr =.. [Op, E],
+    member(Op, ['@', 'c@']),
     compile_expr(E, Env, Consts, LN0, RD, EC, LN),
-    append(EC, [op(@)], Code).
+    append(EC, [op(Op)], Code).
 
-%% deref8 — byte-level read
-compile_expr(deref8(E), Env, Consts, LN0, RD, Code, LN) :-
-    compile_expr(E, Env, Consts, LN0, RD, EC, LN),
-    append(EC, [op('c@')], Code).
-
-%% store
-compile_expr(store(Addr, Val), Env, Consts, LN0, RD, Code, LN) :-
+%% store: '!' and 'c!' — op name is the functor
+compile_expr(Expr, Env, Consts, LN0, RD, Code, LN) :-
+    Expr =.. [Op, Addr, Val],
+    member(Op, ['!', 'c!']),
     compile_expr(Val, Env, Consts, LN0, RD, VC, LN1),
     compile_expr(Addr, Env, Consts, LN1, RD, AC, LN),
     append(VC, AC, C1),
-    append(C1, [op(!)], Code).
-
-%% store8
-compile_expr(store8(Addr, Val), Env, Consts, LN0, RD, Code, LN) :-
-    compile_expr(Val, Env, Consts, LN0, RD, VC, LN1),
-    compile_expr(Addr, Env, Consts, LN1, RD, AC, LN),
-    append(VC, AC, C1),
-    append(C1, [op('c!')], Code).
+    append(C1, [op(Op)], Code).
 
 %% {op ...} — inline VM ops
 compile_expr(inline(Ops), _, _, LN, _, Code, LN) :-
