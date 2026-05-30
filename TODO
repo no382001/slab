@@ -2,7 +2,6 @@
 - with that step i should also reduce the mapping overhead, it should be 1:1
 
 errors / warnings:
-- no main
 - conflicting alloc/const/def names
 - undefined function or variable reference
 - $include file not found

@@ -132,6 +132,16 @@ setup() {
   [[ "$result" == error* ]]
 }
 
+@test "compile rejects: no main" {
+  result="$(compile '(def f () : int 42)')"
+  [[ "$result" == error* ]]
+}
+
+@test "compile rejects: no main but library-only target succeeds" {
+  result="$(compile '(def f () : int 42)' typed)"
+  [[ "$result" == ok* ]]
+}
+
 # ============================================================
 # end-to-end: compile and run
 # ============================================================
@@ -354,22 +364,22 @@ setup() {
 # ============================================================
 
 @test "effects annotation: det accepted on pure fn" {
-  result="$(compile '(def f ((x : int)) : int [det] (+ x 1))' binary)"
+  result="$(compile '(def f ((x : int)) : int [det] (+ x 1))' effects)"
   [[ "$result" == ok* ]]
 }
 
 @test "effects annotation: semidet accepted on memory fn" {
-  result="$(compile '(def f ((p : (ptr int))) : int [semidet] (deref p))' binary)"
+  result="$(compile '(def f ((p : (ptr int))) : int [semidet] (deref p))' effects)"
   [[ "$result" == ok* ]]
 }
 
 @test "effects annotation: nondet accepted on io fn" {
-  result="$(compile '(def f () : void [nondet] (emit 65))' binary)"
+  result="$(compile '(def f () : void [nondet] (emit 65))' effects)"
   [[ "$result" == ok* ]]
 }
 
 @test "effects annotation: nondet accepted on det fn (overapprox)" {
-  result="$(compile '(def f ((x : int)) : int [nondet] (+ x 1))' binary)"
+  result="$(compile '(def f ((x : int)) : int [nondet] (+ x 1))' effects)"
   [[ "$result" == ok* ]]
 }
 

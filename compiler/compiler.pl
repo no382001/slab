@@ -120,12 +120,13 @@ compile_from_forms(Forms, Target, DefLines, SlotBase, Result) :-
                       Result = ok(Tokens)
                   ;
                       ( member(label(main), Tokens) ->
-                          append([branch(main)], Tokens, AllTokens)
+                          append([branch(main)], Tokens, AllTokens),
+                          emit:emit_binary(AllTokens, Bytes),
+                          Result = ok(Bytes)
                       ;
-                          AllTokens = Tokens
-                      ),
-                      emit:emit_binary(AllTokens, Bytes),
-                      Result = ok(Bytes)
+                          write_stderr("error: no main function defined\n"),
+                          Result = error(no_main)
+                      )
                   )
                 )
                 )
