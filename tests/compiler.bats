@@ -602,3 +602,11 @@ setup() {
   # n is a variable, can not fold
   [[ "$result" == *"label(inc)"* ]]
 }
+
+@test "constfold: variadic det function not folded" {
+  # a variadic function can infer as det (no memory ops) and get called
+  # with all-literal args — bind_params only handles fixed params, so
+  # this must not be attempted as a fold, just compiled as a normal call
+  result="$(compile '(def h ((first : int) (rest : int ...)) : int first) (def main () : void (emit (h 1 2 3)) (bye))' ir)"
+  [[ "$result" == *"label(h)"* ]]
+}

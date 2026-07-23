@@ -11,6 +11,11 @@ effect_level(det, 0).
 effect_level(semidet, 1).
 effect_level(nondet, 2).
 
+%% a declared effect is either none, a bare level, or level+inline
+decl_effect_level(none, none) :- !.
+decl_effect_level(inline(Level), Level) :- !.
+decl_effect_level(Level, Level).
+
 %% join: max of two effects
 effect_join(A, B, R) :-
     effect_level(A, LA),
@@ -185,14 +190,15 @@ infer_bindings_effect(Bindings, Env, Eff) :-
 %% LineMap = [Name-Line, ...] mapping def names to source line numbers.
 check_annotations([], _, _, []).
 check_annotations([def(Name, _, _, Decl, _)|Rest], Env, LineMap, Errors) :-
-    ( Decl = none ->
+    decl_effect_level(Decl, Level),
+    ( Level = none ->
         check_annotations(Rest, Env, LineMap, Errors)
     ; member(eff(Name, Inferred), Env) ->
-        effect_level(Decl, DL),
+        effect_level(Level, DL),
         effect_level(Inferred, IL),
         ( IL > DL ->
             ( member(Name-Loc, LineMap) -> true ; Loc = unknown ),
-            Errors = [effect_mismatch(Name, Decl, Inferred, Loc)|RestErrors],
+            Errors = [effect_mismatch(Name, Level, Inferred, Loc)|RestErrors],
             check_annotations(Rest, Env, LineMap, RestErrors)
         ;
             check_annotations(Rest, Env, LineMap, Errors)
@@ -215,13 +221,14 @@ check_annotations([extern(_, _, _, _)|Rest], Env, LineMap, Errors) :-
 %% Warnings for unannotated functions and over-permissive annotations.
 collect_effect_warnings([], _, []).
 collect_effect_warnings([def(Name, _, _, Decl, _)|Rest], Env, Warnings) :-
+    decl_effect_level(Decl, Level),
     member(eff(Name, Inferred), Env),
-    ( Decl = none, Inferred = det ->
+    ( Level = none, Inferred = det ->
         Warnings = [unannotated(Name, Inferred)|RestW]
-    ; effect_level(Decl, DL),
+    ; effect_level(Level, DL),
       effect_level(Inferred, IL),
       IL < DL ->
-        Warnings = [overpermissive(Name, Decl, Inferred)|RestW]
+        Warnings = [overpermissive(Name, Level, Inferred)|RestW]
     ;
         Warnings = RestW
     ),

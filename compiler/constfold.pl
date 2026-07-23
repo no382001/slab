@@ -11,12 +11,17 @@ fold_constants(Defs, EffectEnv, FoldedDefs) :-
     maplist(fold_def(DetFns), Defs, FoldedDefs).
 
 %% Build a lookup of det function bodies: detfn(Name, Params, Body)
+%% Variadic functions are excluded — bind_params/3 only binds fixed
+%% params, so a rest_param here would just fail the whole fold.
 build_det_fns([], _, []).
 build_det_fns([def(Name, Params, _, _, Body)|Rest], Env, [detfn(Name, Params, Body)|Fns]) :-
-    member(eff(Name, det), Env), !,
+    member(eff(Name, det), Env),
+    \+ has_rest_param(Params), !,
     build_det_fns(Rest, Env, Fns).
 build_det_fns([_|Rest], Env, Fns) :-
     build_det_fns(Rest, Env, Fns).
+
+has_rest_param(Params) :- member(rest_param(_, _), Params).
 
 %% ============================================================
 %% fold a definition

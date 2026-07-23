@@ -5,10 +5,10 @@
 ;; ---- byte buffer accessors ----
 ;; idx is the address of the index cell, not its value — callers pass the
 ;; cursor variable itself (e.g. LPOS) rather than dereferencing it first.
-(def byte-ref ((buf : (ptr byte)) (idx : (ptr int))) : byte [semidet]
+(def byte-ref ((buf : (ptr byte)) (idx : (ptr int))) : byte [semidet inline]
   (c@ (+ buf (@ idx))))
 
-(def byte-set! ((buf : (ptr byte)) (idx : (ptr int)) (val : int)) : void [semidet]
+(def byte-set! ((buf : (ptr byte)) (idx : (ptr int)) (val : int)) : void [semidet inline]
   (c! (+ buf (@ idx)) val))
 
 ;; ---- VM registers (memory-mapped) ----

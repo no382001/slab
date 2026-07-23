@@ -137,10 +137,19 @@ transform_binding(list([sym(Name), Expr]), bind(Name, TE)) :-
     transform(Expr, TE).
 
 %% parse optional effect annotation from body forms
-parse_optional_effect([bracket([sym(det)]) | Rest], det, Rest) :- Rest \= [].
-parse_optional_effect([bracket([sym(semidet)]) | Rest], semidet, Rest) :- Rest \= [].
-parse_optional_effect([bracket([sym(nondet)]) | Rest], nondet, Rest) :- Rest \= [].
+%% [level], [level inline], or [inline level] (order doesn't matter)
+parse_optional_effect([bracket(Syms) | Rest], DeclEffect, Rest) :-
+    Rest \= [],
+    effect_bracket_syms(Syms, DeclEffect), !.
 parse_optional_effect(Body, none, Body).
+
+effect_bracket_syms([sym(Level)], Level) :- effect_level_sym(Level).
+effect_bracket_syms([sym(Level), sym(inline)], inline(Level)) :- effect_level_sym(Level).
+effect_bracket_syms([sym(inline), sym(Level)], inline(Level)) :- effect_level_sym(Level).
+
+effect_level_sym(det).
+effect_level_sym(semidet).
+effect_level_sym(nondet).
 
 transform_type(sym(int), int).
 transform_type(sym(byte), byte).

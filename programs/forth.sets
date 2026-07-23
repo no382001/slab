@@ -7,6 +7,7 @@
 
 ;; ---- scratch cells ----
 ($section 32768)
+; i think most of these could be just replaced with a let call
 ($alloc STRI   2)
 ($alloc PRINTI 2)
 ($alloc NAMEI  2)
@@ -71,7 +72,7 @@
 ;; ============================================================
 
 (def streq ((a : (ptr byte)) (b : (ptr byte))) : bool [semidet]
-  (! STRI 0)
+  (! STRI 0) ; i could use let here?
   (while (and (= (byte-ref a STRI) (byte-ref b STRI))
               (!= (byte-ref a STRI) 0))
     (! STRI (+ (@ STRI) 1)))

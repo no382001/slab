@@ -10,6 +10,7 @@
 :- use_module(effects).
 :- use_module(deadcode).
 :- use_module(constfold).
+:- use_module(inline).
 
 :- use_module(library(lists)).
 :- use_module(library(format)).
@@ -110,8 +111,12 @@ compile_from_forms(Forms, Target, DefLines, SlotBase, Result) :-
                 %% Stage 3.6b: effect annotation warnings (non-fatal, to stderr)
                 effects:collect_effect_warnings(TypedDefs, EffectEnv, EffWarnings),
                 warn_effects(EffWarnings),
+                %% Stage 3.65: expand [inline] call sites
+                inline:inline_warnings(TypedDefs, InlineWarnings),
+                warn_inline(InlineWarnings),
+                inline:inline_calls(TypedDefs, InlinedDefs),
                 %% Stage 3.7: constant folding for det functions
-                constfold:fold_constants(TypedDefs, EffectEnv, FoldedDefs),
+                constfold:fold_constants(InlinedDefs, EffectEnv, FoldedDefs),
                 codegen:compile_program(FoldedDefs, SlotBase, CgResult),
                 ( CgResult \= ok(_) ->
                     Result = error(codegen, CgResult)
@@ -285,6 +290,26 @@ warn_dead_code([Kind-Name|Rest]) :-
     append(P4, "'\n", Msg),
     write_stderr(Msg),
     warn_dead_code(Rest).
+
+%% [inline] hints that can't actually be honored, to stderr
+warn_inline([]).
+warn_inline([ineligible_variadic(Name)|Rest]) :-
+    warn_inline_reason(Name, "has a rest param"),
+    warn_inline(Rest).
+warn_inline([ineligible_self_recursive(Name)|Rest]) :-
+    warn_inline_reason(Name, "calls itself"),
+    warn_inline(Rest).
+
+warn_inline_reason(Name, Reason) :-
+    atom_chars(Name, NameChars),
+    ansi_yellow("warning:", WarnTag),
+    ansi_bold(NameChars, BoldName),
+    append(WarnTag, " '", P1),
+    append(P1, BoldName, P2),
+    append(P2, "' declared [inline] but ", P3),
+    append(P3, Reason, P4),
+    append(P4, ", ignoring hint\n", Msg),
+    write_stderr(Msg).
 
 kind_label(func,   "function").
 kind_label(const,  "const").
