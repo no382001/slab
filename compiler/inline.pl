@@ -51,9 +51,9 @@ expr_calls_name(do(Exprs), Name) :- !, calls_name(Exprs, Name).
 expr_calls_name(while(Cond, Body), Name) :-
     !,
     ( expr_calls_name(Cond, Name) -> true ; calls_name(Body, Name) ).
-expr_calls_name('@'(E), Name) :- !, expr_calls_name(E, Name).
+expr_calls_name(@(E), Name) :- !, expr_calls_name(E, Name).
 expr_calls_name('c@'(E), Name) :- !, expr_calls_name(E, Name).
-expr_calls_name('!'(A, V), Name) :- !, calls_name([A, V], Name).
+expr_calls_name(!(A, V), Name) :- !, calls_name([A, V], Name).
 expr_calls_name('c!'(A, V), Name) :- !, calls_name([A, V], Name).
 expr_calls_name(execute(E), Name) :- !, expr_calls_name(E, Name).
 
@@ -102,9 +102,9 @@ inline_expr(Fns, D, while(Cond, Body), while(ICond, IBody)) :-
     inline_expr(Fns, D, Cond, ICond),
     maplist(inline_expr(Fns, D), Body, IBody).
 
-inline_expr(Fns, D, '@'(E), '@'(IE)) :- inline_expr(Fns, D, E, IE).
+inline_expr(Fns, D, @(E), @(IE)) :- inline_expr(Fns, D, E, IE).
 inline_expr(Fns, D, 'c@'(E), 'c@'(IE)) :- inline_expr(Fns, D, E, IE).
-inline_expr(Fns, D, '!'(A, V), '!'(IA, IV)) :-
+inline_expr(Fns, D, !(A, V), !(IA, IV)) :-
     inline_expr(Fns, D, A, IA),
     inline_expr(Fns, D, V, IV).
 inline_expr(Fns, D, 'c!'(A, V), 'c!'(IA, IV)) :-
@@ -189,9 +189,9 @@ rename_expr(R, while(Cond, Body), while(RCond, RBody)) :-
     rename_expr(R, Cond, RCond),
     maplist(rename_expr(R), Body, RBody).
 
-rename_expr(R, '@'(E), '@'(RE)) :- rename_expr(R, E, RE).
+rename_expr(R, @(E), @(RE)) :- rename_expr(R, E, RE).
 rename_expr(R, 'c@'(E), 'c@'(RE)) :- rename_expr(R, E, RE).
-rename_expr(R, '!'(A, V), '!'(RA, RV)) :-
+rename_expr(R, !(A, V), !(RA, RV)) :-
     rename_expr(R, A, RA),
     rename_expr(R, V, RV).
 rename_expr(R, 'c!'(A, V), 'c!'(RA, RV)) :-

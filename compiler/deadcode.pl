@@ -51,10 +51,10 @@ expr_refs(str(_), []).
 expr_refs(var(Name), [Name]).
 expr_refs(addr(Name), [Name]).
 expr_refs(execute(E), Refs) :- expr_refs(E, Refs).
-expr_refs('@'(E), Refs) :- expr_refs(E, Refs).
+expr_refs(@(E), Refs) :- expr_refs(E, Refs).
 expr_refs('c@'(E), Refs) :- expr_refs(E, Refs).
 
-expr_refs('!'(A, V), Refs) :-
+expr_refs(!(A, V), Refs) :-
     expr_refs(A, RA), expr_refs(V, RV),
     append(RA, RV, Refs).
 expr_refs('c!'(A, V), Refs) :-

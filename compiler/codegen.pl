@@ -95,9 +95,9 @@ collect_calls(let(Bindings, Body), Calls) :-
 collect_calls(do(Exprs), Calls) :- collect_calls_list(Exprs, Calls).
 collect_calls(while(Cond, Body), Calls) :-
     collect_calls(Cond, CC), collect_calls_list(Body, CB), append(CC, CB, Calls).
-collect_calls('@'(E), Calls) :- collect_calls(E, Calls).
+collect_calls(@(E), Calls) :- collect_calls(E, Calls).
 collect_calls('c@'(E), Calls) :- collect_calls(E, Calls).
-collect_calls('!'(A, V), Calls) :-
+collect_calls(!(A, V), Calls) :-
     collect_calls(A, CA), collect_calls(V, CV), append(CA, CV, Calls).
 collect_calls('c!'(A, V), Calls) :-
     collect_calls(A, CA), collect_calls(V, CV), append(CA, CV, Calls).
@@ -190,13 +190,13 @@ rest_prologue(CountSlot, RestSlot, RestBase, IterSlot, Consts, LN0, Code, LN) :-
     append(LoopConsts, Consts, ExtConsts),
     PopCount = [lit(CountSlot), op(!)],
     BindRestPtr = [lit(RestBase), lit(RestSlot), op(!)],
-    InitIter = '!'(var(rest_iter_sym), binop(-, '@'(var(rest_count_sym)), num(1))),
+    InitIter = !(var(rest_iter_sym), binop(-, @(var(rest_count_sym)), num(1))),
     compile_expr(InitIter, [], ExtConsts, LN0, 0, InitIterCode, LN1),
-    Cond = binop(>=, '@'(var(rest_iter_sym)), num(0)),
+    Cond = binop(>=, @(var(rest_iter_sym)), num(0)),
     compile_expr(Cond, [], ExtConsts, LN1, 0, CondCode, LN2),
-    AddrExpr = binop(+, var(rest_base_sym), binop(*, '@'(var(rest_iter_sym)), num(2))),
+    AddrExpr = binop(+, var(rest_base_sym), binop(*, @(var(rest_iter_sym)), num(2))),
     compile_expr(AddrExpr, [], ExtConsts, LN2, 0, AddrCode, LN3),
-    Decr = '!'(var(rest_iter_sym), binop(-, '@'(var(rest_iter_sym)), num(1))),
+    Decr = !(var(rest_iter_sym), binop(-, @(var(rest_iter_sym)), num(1))),
     compile_expr(Decr, [], ExtConsts, LN3, 0, DecrCode, LN4),
     genlabel(LN4, "_restpop_", StartL, LN5),
     genlabel(LN5, "_restend_", EndL, LN),
@@ -224,7 +224,7 @@ compile_body([E | Rest], Env, Consts, LN0, RD, Code, LN) :-
     append(ECode, DropCode, ECodeD),
     append(ECodeD, RestCode, Code).
 
-void_expr(Expr) :- Expr =.. [Op, _, _], member(Op, ['!', 'c!']).
+void_expr(Expr) :- Expr =.. [Op, _, _], member(Op, [!, 'c!']).
 void_expr(while(_, _)).
 void_expr(execute(_)).
 void_expr(call(Name, _)) :- builtin_trap(Name, void, _).
@@ -253,7 +253,7 @@ compile_expr(str(Chars), _, _, LN0, _, Code, LN) :-
     append([branch(EndL), label(DataL) | DataWithNull],
            [label(EndL), lit_label(DataL)], Code).
 
-%% variable: '@' from rack slot or memory slot
+%% variable: @ from rack slot or memory slot
 compile_expr(var(Name), Env, Consts, LN, RD, Code, LN) :-
     ( member(rvar(Name, Pos), Env) ->
         Depth is RD - 1 - Pos,
@@ -308,17 +308,17 @@ compile_expr(while(Cond, Body), Env, Consts, LN0, RD, Code, LN) :-
     append(C1, BC, C2),
     append(C2, [branch(StartL), label(EndL)], Code).
 
-%% load: '@' and 'c@' — op name is the functor
+%% load: @ and 'c@' — op name is the functor
 compile_expr(Expr, Env, Consts, LN0, RD, Code, LN) :-
     Expr =.. [Op, E],
-    member(Op, ['@', 'c@']),
+    member(Op, [@, 'c@']),
     compile_expr(E, Env, Consts, LN0, RD, EC, LN),
     append(EC, [op(Op)], Code).
 
-%% store: '!' and 'c!' — op name is the functor
+%% store: ! and 'c!' — op name is the functor
 compile_expr(Expr, Env, Consts, LN0, RD, Code, LN) :-
     Expr =.. [Op, Addr, Val],
-    member(Op, ['!', 'c!']),
+    member(Op, [!, 'c!']),
     compile_expr(Val, Env, Consts, LN0, RD, VC, LN1),
     compile_expr(Addr, Env, Consts, LN1, RD, AC, LN),
     append(VC, AC, C1),

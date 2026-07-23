@@ -50,11 +50,11 @@ expand_expr(Renames, Slot0, while(Cond, Body), while(NCond, NBody), CD0, CD2, Sl
     expand_expr(Renames, Slot0, Cond, NCond, CD0, CD1, Slot1),
     expand_exprs(Renames, Slot1, Body, NBody, CD1, CD2, Slot2).
 
-expand_expr(Renames, Slot0, '@'(E), '@'(NE), CD0, CD1, Slot1) :-
+expand_expr(Renames, Slot0, @(E), @(NE), CD0, CD1, Slot1) :-
     expand_expr(Renames, Slot0, E, NE, CD0, CD1, Slot1).
 expand_expr(Renames, Slot0, 'c@'(E), 'c@'(NE), CD0, CD1, Slot1) :-
     expand_expr(Renames, Slot0, E, NE, CD0, CD1, Slot1).
-expand_expr(Renames, Slot0, '!'(A, V), '!'(NA, NV), CD0, CD2, Slot2) :-
+expand_expr(Renames, Slot0, !(A, V), !(NA, NV), CD0, CD2, Slot2) :-
     expand_expr(Renames, Slot0, A, NA, CD0, CD1, Slot1),
     expand_expr(Renames, Slot1, V, NV, CD1, CD2, Slot2).
 expand_expr(Renames, Slot0, 'c!'(A, V), 'c!'(NA, NV), CD0, CD2, Slot2) :-
@@ -87,7 +87,7 @@ expand_local_bindings(Renames, Slot0, [bind(Name, Expr) | Rest], [Store | RestSt
     fresh_local_name(Name, Fresh),
     Addr = Slot1,
     Slot1a is Slot1 + 2,
-    Store = '!'(var(Fresh), NExpr),
+    Store = !(var(Fresh), NExpr),
     expand_local_bindings([Name-Fresh | Renames], Slot1a, Rest, RestStores,
                            [const(Fresh, int, num(Addr)) | CD1], CD2, Slot2, FinalRenames).
 

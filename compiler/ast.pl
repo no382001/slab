@@ -82,20 +82,20 @@ transform(list([sym(addr), sym(Name)]), addr(Name)).
 transform(list([sym(execute), E]), execute(TE)) :-
     transform(E, TE).
 
-%% (@ expr) — '@' cell
-transform(list([sym('@'), E]), '@'(TE)) :-
+%% (@ expr) — @ cell
+transform(list([sym(@), E]), @(TE)) :-
     transform(E, TE).
 
-%% (c@ expr) — '@' byte
+%% (c@ expr) — @ byte
 transform(list([sym('c@'), E]), 'c@'(TE)) :-
     transform(E, TE).
 
-%% (! addr val) — '!' cell
-transform(list([sym('!'), A, V]), '!'(TA, TV)) :-
+%% (! addr val) — ! cell
+transform(list([sym(!), A, V]), !(TA, TV)) :-
     transform(A, TA),
     transform(V, TV).
 
-%% (c! addr val) — '!' byte
+%% (c! addr val) — ! byte
 transform(list([sym('c!'), A, V]), 'c!'(TA, TV)) :-
     transform(A, TA),
     transform(V, TV).
@@ -171,7 +171,7 @@ binop('!='). binop(<=). binop(>=).
 
 reserved(def). reserved(let). reserved(local). reserved(if). reserved(do).
 reserved(while). reserved(const). reserved(extern).
-reserved('@'). reserved('c@'). reserved('!'). reserved('c!').
+reserved(@). reserved('c@'). reserved(!). reserved('c!').
 reserved(addr). reserved(execute).
 reserved('$include').
 

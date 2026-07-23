@@ -174,8 +174,8 @@ infer(Env, FEnv, while(Cond, Body), void) :-
     infer(Env, FEnv, Cond, bool),
     infer_body(Body, Env, FEnv, _).
 
-%% '@': ptr(T) -> T, or int -> int (raw address)
-infer(Env, FEnv, '@'(E), T) :-
+%% @: ptr(T) -> T, or int -> int (raw address)
+infer(Env, FEnv, @(E), T) :-
     infer(Env, FEnv, E, ET),
     (ET = ptr(T) ; (numeric_type(ET), T = int)).
 
@@ -184,8 +184,8 @@ infer(Env, FEnv, 'c@'(E), byte) :-
     infer(Env, FEnv, E, ET),
     (ET = ptr(byte) ; numeric_type(ET)).
 
-%% '!': ptr(T) × T -> void, or int addr
-infer(Env, FEnv, '!'(Addr, Val), void) :-
+%% !: ptr(T) × T -> void, or int addr
+infer(Env, FEnv, !(Addr, Val), void) :-
     infer(Env, FEnv, Addr, AT),
     (AT = ptr(T) ; (numeric_type(AT), T = int)),
     infer(Env, FEnv, Val, VT),
