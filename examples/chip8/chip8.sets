@@ -268,41 +268,59 @@
 ;; 0x8: arithmetic / logic
 ;; ============================================================
 
+;; 8XY0: Vx = Vy
+(def c8_op_8_ld ((vy : int)) : void [semidet]
+  (c! (+ C8_V (@ C8_X)) vy))
+
+;; 8XY1: Vx |= Vy (reset VF quirk: skip for now)
+(def c8_op_8_or ((vx : int) (vy : int)) : void [semidet]
+  (c! (+ C8_V (@ C8_X)) (or vx vy)))
+
+;; 8XY2: Vx &= Vy
+(def c8_op_8_and ((vx : int) (vy : int)) : void [semidet]
+  (c! (+ C8_V (@ C8_X)) (and vx vy)))
+
+;; 8XY3: Vx ^= Vy
+(def c8_op_8_xor ((vx : int) (vy : int)) : void [semidet]
+  (c! (+ C8_V (@ C8_X)) (xor vx vy)))
+
+;; 8XY4: Vx += Vy, VF = carry
+(def c8_op_8_add ((vx : int) (vy : int)) : void [semidet]
+  (let ((res (+ vx vy)))
+    (c! (+ C8_V (@ C8_X)) (and res 255))
+    (c! (c8_vf_addr) (if (< 255 res) 1 0))))
+
+;; 8XY5: Vx -= Vy, VF = 1 if no borrow
+(def c8_op_8_sub ((vx : int) (vy : int)) : void [semidet]
+  (do (c! (c8_vf_addr) (if (< vx vy) 0 1))
+      (c! (+ C8_V (@ C8_X)) (and (- vx vy) 255))))
+
+;; 8XY6: Vx >>= 1, VF = old LSB
+(def c8_op_8_shr ((vx : int)) : void [semidet]
+  (do (c! (c8_vf_addr) (and vx 1))
+      (c! (+ C8_V (@ C8_X)) (c8_div vx 2))))
+
+;; 8XY7: Vx = Vy - Vx, VF = 1 if no borrow
+(def c8_op_8_subn ((vx : int) (vy : int)) : void [semidet]
+  (do (c! (c8_vf_addr) (if (< vy vx) 0 1))
+      (c! (+ C8_V (@ C8_X)) (and (- vy vx) 255))))
+
+;; 8XYE: Vx <<= 1, VF = old MSB
+(def c8_op_8_shl ((vx : int)) : void [semidet]
+  (do (c! (c8_vf_addr) (c8_div (and vx 128) 128))
+      (c! (+ C8_V (@ C8_X)) (and (c8_mul vx 2) 255))))
+
 (def c8_op_8 () : void [semidet]
   (let ((vx (c8_vx)) (vy (c8_vy)))
-    (if (= (@ C8_N) OP8_LD)
-      ;; 8XY0: Vx = Vy
-      (c! (+ C8_V (@ C8_X)) vy)
-    (if (= (@ C8_N) OP8_OR)
-      ;; 8XY1: Vx |= Vy (reset VF quirk: skip for now)
-      (c! (+ C8_V (@ C8_X)) (or vx vy))
-    (if (= (@ C8_N) OP8_AND)
-      ;; 8XY2: Vx &= Vy
-      (c! (+ C8_V (@ C8_X)) (and vx vy))
-    (if (= (@ C8_N) OP8_XOR)
-      ;; 8XY3: Vx ^= Vy
-      (c! (+ C8_V (@ C8_X)) (xor vx vy))
-    (if (= (@ C8_N) OP8_ADD)
-      ;; 8XY4: Vx += Vy, VF = carry
-      (let ((res (+ vx vy)))
-        (c! (+ C8_V (@ C8_X)) (and res 255))
-        (c! (c8_vf_addr) (if (< 255 res) 1 0)))
-    (if (= (@ C8_N) OP8_SUB)
-      ;; 8XY5: Vx -= Vy, VF = 1 if no borrow
-      (do (c! (c8_vf_addr) (if (< vx vy) 0 1))
-          (c! (+ C8_V (@ C8_X)) (and (- vx vy) 255)))
-    (if (= (@ C8_N) OP8_SHR)
-      ;; 8XY6: Vx >>= 1, VF = old LSB
-      (do (c! (c8_vf_addr) (and vx 1))
-          (c! (+ C8_V (@ C8_X)) (c8_div vx 2)))
-    (if (= (@ C8_N) OP8_SUBN)
-      ;; 8XY7: Vx = Vy - Vx, VF = 1 if no borrow
-      (do (c! (c8_vf_addr) (if (< vy vx) 0 1))
-          (c! (+ C8_V (@ C8_X)) (and (- vy vx) 255)))
-    (if (= (@ C8_N) OP8_SHL)
-      ;; 8XYE: Vx <<= 1, VF = old MSB
-      (do (c! (c8_vf_addr) (c8_div (and vx 128) 128))
-          (c! (+ C8_V (@ C8_X)) (and (c8_mul vx 2) 255)))
+    (if (= (@ C8_N) OP8_LD)    (c8_op_8_ld vy)
+    (if (= (@ C8_N) OP8_OR)    (c8_op_8_or vx vy)
+    (if (= (@ C8_N) OP8_AND)   (c8_op_8_and vx vy)
+    (if (= (@ C8_N) OP8_XOR)   (c8_op_8_xor vx vy)
+    (if (= (@ C8_N) OP8_ADD)   (c8_op_8_add vx vy)
+    (if (= (@ C8_N) OP8_SUB)   (c8_op_8_sub vx vy)
+    (if (= (@ C8_N) OP8_SHR)   (c8_op_8_shr vx)
+    (if (= (@ C8_N) OP8_SUBN)  (c8_op_8_subn vx vy)
+    (if (= (@ C8_N) OP8_SHL)   (c8_op_8_shl vx)
       (! C8_ITER 0))))))))))))
 
 ;; ============================================================
