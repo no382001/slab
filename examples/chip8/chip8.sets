@@ -45,6 +45,40 @@
 ($alloc C8_FB   2048)  ; 64×32 framebuffer (1 byte per pixel: 0=off, 1=on)
 
 ;; ============================================================
+;; Opcode / sub-opcode constants
+;; ============================================================
+
+;; 0x0___
+(const OP0_CLS       int 224)  ; 00E0: clear screen
+(const OP0_RET       int 238)  ; 00EE: return from subroutine
+
+;; 0x8XY_ (low nibble selects the ALU op)
+(const OP8_LD        int 0)    ; 8XY0: Vx = Vy
+(const OP8_OR        int 1)    ; 8XY1: Vx |= Vy
+(const OP8_AND       int 2)    ; 8XY2: Vx &= Vy
+(const OP8_XOR       int 3)    ; 8XY3: Vx ^= Vy
+(const OP8_ADD       int 4)    ; 8XY4: Vx += Vy, VF = carry
+(const OP8_SUB       int 5)    ; 8XY5: Vx -= Vy, VF = NOT borrow
+(const OP8_SHR       int 6)    ; 8XY6: Vx >>= 1, VF = old LSB
+(const OP8_SUBN      int 7)    ; 8XY7: Vx = Vy - Vx, VF = NOT borrow
+(const OP8_SHL       int 14)   ; 8XYE: Vx <<= 1, VF = old MSB
+
+;; 0xEX__
+(const KEY_EX9E      int 158)  ; EX9E: skip if key Vx pressed
+(const KEY_EXA1      int 161)  ; EXA1: skip if key Vx NOT pressed
+
+;; 0xFX__
+(const FX_LD_VX_DT   int 7)    ; FX07: Vx = DT
+(const FX_LD_VX_KEY  int 10)   ; FX0A: wait for key, store in Vx
+(const FX_LD_DT_VX   int 21)   ; FX15: DT = Vx
+(const FX_LD_ST_VX   int 24)   ; FX18: ST = Vx
+(const FX_ADD_I_VX   int 30)   ; FX1E: I += Vx
+(const FX_LD_F_VX    int 41)   ; FX29: I = font sprite address for Vx
+(const FX_LD_B_VX    int 51)   ; FX33: BCD of Vx at I, I+1, I+2
+(const FX_LD_I_VX    int 85)   ; FX55: store V0..Vx to memory[I..]
+(const FX_LD_VX_I    int 101)  ; FX65: load V0..Vx from memory[I..]
+
+;; ============================================================
 ;; Arithmetic helpers
 ;; ============================================================
 
@@ -68,39 +102,32 @@
 ;; Font init — ! 16 sprites (5 bytes each) into C8_MEM[0..79]
 ;; ============================================================
 
+;; Writes one 5-byte glyph at C8_MEM[base..base+4]. Each row is a byte
+;; of the sprite as it appears on screen (bit 7 = leftmost pixel).
+(def c8_write_glyph ((base : int) (b0 : int) (b1 : int) (b2 : int) (b3 : int) (b4 : int)) : void [semidet]
+  (c! (+ C8_MEM base) b0)
+  (c! (+ C8_MEM (+ base 1)) b1)
+  (c! (+ C8_MEM (+ base 2)) b2)
+  (c! (+ C8_MEM (+ base 3)) b3)
+  (c! (+ C8_MEM (+ base 4)) b4))
+
 (def c8_load_font () : void [semidet]
-  ;; 0: F0 90 90 90 F0
-  (c! (+ C8_MEM 0) 240) (c! (+ C8_MEM 1) 144) (c! (+ C8_MEM 2) 144) (c! (+ C8_MEM 3) 144) (c! (+ C8_MEM 4) 240)
-  ;; 1: 20 60 20 20 70
-  (c! (+ C8_MEM 5) 32) (c! (+ C8_MEM 6) 96) (c! (+ C8_MEM 7) 32) (c! (+ C8_MEM 8) 32) (c! (+ C8_MEM 9) 112)
-  ;; 2: F0 10 F0 80 F0
-  (c! (+ C8_MEM 10) 240) (c! (+ C8_MEM 11) 16) (c! (+ C8_MEM 12) 240) (c! (+ C8_MEM 13) 128) (c! (+ C8_MEM 14) 240)
-  ;; 3: F0 10 F0 10 F0
-  (c! (+ C8_MEM 15) 240) (c! (+ C8_MEM 16) 16) (c! (+ C8_MEM 17) 240) (c! (+ C8_MEM 18) 16) (c! (+ C8_MEM 19) 240)
-  ;; 4: 90 90 F0 10 10
-  (c! (+ C8_MEM 20) 144) (c! (+ C8_MEM 21) 144) (c! (+ C8_MEM 22) 240) (c! (+ C8_MEM 23) 16) (c! (+ C8_MEM 24) 16)
-  ;; 5: F0 80 F0 10 F0
-  (c! (+ C8_MEM 25) 240) (c! (+ C8_MEM 26) 128) (c! (+ C8_MEM 27) 240) (c! (+ C8_MEM 28) 16) (c! (+ C8_MEM 29) 240)
-  ;; 6: F0 80 F0 90 F0
-  (c! (+ C8_MEM 30) 240) (c! (+ C8_MEM 31) 128) (c! (+ C8_MEM 32) 240) (c! (+ C8_MEM 33) 144) (c! (+ C8_MEM 34) 240)
-  ;; 7: F0 10 20 40 40
-  (c! (+ C8_MEM 35) 240) (c! (+ C8_MEM 36) 16) (c! (+ C8_MEM 37) 32) (c! (+ C8_MEM 38) 64) (c! (+ C8_MEM 39) 64)
-  ;; 8: F0 90 F0 90 F0
-  (c! (+ C8_MEM 40) 240) (c! (+ C8_MEM 41) 144) (c! (+ C8_MEM 42) 240) (c! (+ C8_MEM 43) 144) (c! (+ C8_MEM 44) 240)
-  ;; 9: F0 90 F0 10 F0
-  (c! (+ C8_MEM 45) 240) (c! (+ C8_MEM 46) 144) (c! (+ C8_MEM 47) 240) (c! (+ C8_MEM 48) 16) (c! (+ C8_MEM 49) 240)
-  ;; A: F0 90 F0 90 90
-  (c! (+ C8_MEM 50) 240) (c! (+ C8_MEM 51) 144) (c! (+ C8_MEM 52) 240) (c! (+ C8_MEM 53) 144) (c! (+ C8_MEM 54) 144)
-  ;; B: E0 90 E0 90 E0
-  (c! (+ C8_MEM 55) 224) (c! (+ C8_MEM 56) 144) (c! (+ C8_MEM 57) 224) (c! (+ C8_MEM 58) 144) (c! (+ C8_MEM 59) 224)
-  ;; C: F0 80 80 80 F0
-  (c! (+ C8_MEM 60) 240) (c! (+ C8_MEM 61) 128) (c! (+ C8_MEM 62) 128) (c! (+ C8_MEM 63) 128) (c! (+ C8_MEM 64) 240)
-  ;; D: E0 90 90 90 E0
-  (c! (+ C8_MEM 65) 224) (c! (+ C8_MEM 66) 144) (c! (+ C8_MEM 67) 144) (c! (+ C8_MEM 68) 144) (c! (+ C8_MEM 69) 224)
-  ;; E: F0 80 F0 80 F0
-  (c! (+ C8_MEM 70) 240) (c! (+ C8_MEM 71) 128) (c! (+ C8_MEM 72) 240) (c! (+ C8_MEM 73) 128) (c! (+ C8_MEM 74) 240)
-  ;; F: F0 80 F0 80 80
-  (c! (+ C8_MEM 75) 240) (c! (+ C8_MEM 76) 128) (c! (+ C8_MEM 77) 240) (c! (+ C8_MEM 78) 128) (c! (+ C8_MEM 79) 128))
+  (c8_write_glyph  0 240 144 144 144 240)  ; 0: F0 90 90 90 F0
+  (c8_write_glyph  5  32  96  32  32 112)  ; 1: 20 60 20 20 70
+  (c8_write_glyph 10 240  16 240 128 240)  ; 2: F0 10 F0 80 F0
+  (c8_write_glyph 15 240  16 240  16 240)  ; 3: F0 10 F0 10 F0
+  (c8_write_glyph 20 144 144 240  16  16)  ; 4: 90 90 F0 10 10
+  (c8_write_glyph 25 240 128 240  16 240)  ; 5: F0 80 F0 10 F0
+  (c8_write_glyph 30 240 128 240 144 240)  ; 6: F0 80 F0 90 F0
+  (c8_write_glyph 35 240  16  32  64  64)  ; 7: F0 10 20 40 40
+  (c8_write_glyph 40 240 144 240 144 240)  ; 8: F0 90 F0 90 F0
+  (c8_write_glyph 45 240 144 240  16 240)  ; 9: F0 90 F0 10 F0
+  (c8_write_glyph 50 240 144 240 144 144)  ; A: F0 90 F0 90 90
+  (c8_write_glyph 55 224 144 224 144 224)  ; B: E0 90 E0 90 E0
+  (c8_write_glyph 60 240 128 128 128 240)  ; C: F0 80 80 80 F0
+  (c8_write_glyph 65 224 144 144 144 224)  ; D: E0 90 90 90 E0
+  (c8_write_glyph 70 240 128 240 128 240)  ; E: F0 80 F0 80 F0
+  (c8_write_glyph 75 240 128 240 128 128)) ; F: F0 80 F0 80 80
 
 ;; ============================================================
 ;; State init
@@ -169,12 +196,12 @@
 ;; ============================================================
 
 (def c8_op_0 () : void [semidet]
-  (if (= (@ C8_NN) 224)
+  (if (= (@ C8_NN) OP0_CLS)
     (do (! C8_ITER 0)
         (while (< (@ C8_ITER) 2048)
           (c! (+ C8_FB (@ C8_ITER)) 0)
           (! C8_ITER (+ (@ C8_ITER) 1))))
-    (if (= (@ C8_NN) 238)
+    (if (= (@ C8_NN) OP0_RET)
       (do (! C8_SP (- (@ C8_SP) 1))
           (! C8_PC (@ (+ C8_STACK (c8_mul (@ C8_SP) 2)))))
       (! C8_ITER 0))))
@@ -243,36 +270,36 @@
 
 (def c8_op_8 () : void [semidet]
   (let ((vx (c8_vx)) (vy (c8_vy)))
-    (if (= (@ C8_N) 0)
+    (if (= (@ C8_N) OP8_LD)
       ;; 8XY0: Vx = Vy
       (c! (+ C8_V (@ C8_X)) vy)
-    (if (= (@ C8_N) 1)
+    (if (= (@ C8_N) OP8_OR)
       ;; 8XY1: Vx |= Vy (reset VF quirk: skip for now)
       (c! (+ C8_V (@ C8_X)) (or vx vy))
-    (if (= (@ C8_N) 2)
+    (if (= (@ C8_N) OP8_AND)
       ;; 8XY2: Vx &= Vy
       (c! (+ C8_V (@ C8_X)) (and vx vy))
-    (if (= (@ C8_N) 3)
+    (if (= (@ C8_N) OP8_XOR)
       ;; 8XY3: Vx ^= Vy
       (c! (+ C8_V (@ C8_X)) (xor vx vy))
-    (if (= (@ C8_N) 4)
+    (if (= (@ C8_N) OP8_ADD)
       ;; 8XY4: Vx += Vy, VF = carry
       (let ((res (+ vx vy)))
         (c! (+ C8_V (@ C8_X)) (and res 255))
         (c! (c8_vf_addr) (if (< 255 res) 1 0)))
-    (if (= (@ C8_N) 5)
+    (if (= (@ C8_N) OP8_SUB)
       ;; 8XY5: Vx -= Vy, VF = 1 if no borrow
       (do (c! (c8_vf_addr) (if (< vx vy) 0 1))
           (c! (+ C8_V (@ C8_X)) (and (- vx vy) 255)))
-    (if (= (@ C8_N) 6)
+    (if (= (@ C8_N) OP8_SHR)
       ;; 8XY6: Vx >>= 1, VF = old LSB
       (do (c! (c8_vf_addr) (and vx 1))
           (c! (+ C8_V (@ C8_X)) (c8_div vx 2)))
-    (if (= (@ C8_N) 7)
+    (if (= (@ C8_N) OP8_SUBN)
       ;; 8XY7: Vx = Vy - Vx, VF = 1 if no borrow
       (do (c! (c8_vf_addr) (if (< vy vx) 0 1))
           (c! (+ C8_V (@ C8_X)) (and (- vy vx) 255)))
-    (if (= (@ C8_N) 14)
+    (if (= (@ C8_N) OP8_SHL)
       ;; 8XYE: Vx <<= 1, VF = old MSB
       (do (c! (c8_vf_addr) (c8_div (and vx 128) 128))
           (c! (+ C8_V (@ C8_X)) (and (c8_mul vx 2) 255)))
@@ -340,12 +367,12 @@
 ;; ============================================================
 
 (def c8_op_E () : void [nondet]
-  (if (= (@ C8_NN) 158)
+  (if (= (@ C8_NN) KEY_EX9E)
     ;; EX9E: skip if key Vx pressed
     (if (key-is-down (c8_vx))
       (! C8_PC (+ (@ C8_PC) 2))
       (! C8_ITER 0))
-    (if (= (@ C8_NN) 161)
+    (if (= (@ C8_NN) KEY_EXA1)
       ;; EXA1: skip if key Vx NOT pressed
       (if (key-is-down (c8_vx))
         (! C8_ITER 0)
@@ -358,10 +385,10 @@
 
 (def c8_op_F () : void [nondet]
   (let ((vx (c8_vx)))
-    (if (= (@ C8_NN) 7)
+    (if (= (@ C8_NN) FX_LD_VX_DT)
       ;; FX07: Vx = DT
       (c! (+ C8_V (@ C8_X)) (@ C8_DT))
-    (if (= (@ C8_NN) 10)
+    (if (= (@ C8_NN) FX_LD_VX_KEY)
       ;; FX0A: wait for any key, ! in Vx
       (do (! C8_PIX -1)
           (while (= (@ C8_PIX) -1)
@@ -373,33 +400,33 @@
                     (! C8_ITER 16))
                 (! C8_ITER (+ (@ C8_ITER) 1)))))
           (c! (+ C8_V (@ C8_X)) (@ C8_PIX)))
-    (if (= (@ C8_NN) 21)
+    (if (= (@ C8_NN) FX_LD_DT_VX)
       ;; FX15: DT = Vx
       (! C8_DT vx)
-    (if (= (@ C8_NN) 24)
+    (if (= (@ C8_NN) FX_LD_ST_VX)
       ;; FX18: ST = Vx
       (! C8_ST vx)
-    (if (= (@ C8_NN) 30)
+    (if (= (@ C8_NN) FX_ADD_I_VX)
       ;; FX1E: I += Vx
       (! C8_I (+ (@ C8_I) vx))
-    (if (= (@ C8_NN) 41)
+    (if (= (@ C8_NN) FX_LD_F_VX)
       ;; FX29: I = address of sprite for hex digit Vx
       (! C8_I (c8_mul vx 5))
-    (if (= (@ C8_NN) 51)
+    (if (= (@ C8_NN) FX_LD_B_VX)
       ;; FX33: BCD of Vx at I, I+1, I+2
       (let ((h (c8_div vx 100)))
         (c! (+ C8_MEM (@ C8_I)) h)
         (let ((t (c8_div (@ C8_DR) 10)))
           (c! (+ C8_MEM (+ (@ C8_I) 1)) t)
           (c! (+ C8_MEM (+ (@ C8_I) 2)) (@ C8_DR))))
-    (if (= (@ C8_NN) 85)
+    (if (= (@ C8_NN) FX_LD_I_VX)
       ;; FX55: ! V0..Vx at memory[I..]
       (do (! C8_ITER 0)
           (while (< (@ C8_ITER) (+ (@ C8_X) 1))
             (c! (+ C8_MEM (+ (@ C8_I) (@ C8_ITER)))
                     (c@ (+ C8_V (@ C8_ITER))))
             (! C8_ITER (+ (@ C8_ITER) 1))))
-    (if (= (@ C8_NN) 101)
+    (if (= (@ C8_NN) FX_LD_VX_I)
       ;; FX65: load V0..Vx from memory[I..]
       (do (! C8_ITER 0)
           (while (< (@ C8_ITER) (+ (@ C8_X) 1))
