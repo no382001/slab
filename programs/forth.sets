@@ -72,15 +72,15 @@
 
 (def streq ((a : (ptr byte)) (b : (ptr byte))) : bool [semidet]
   (! STRI 0)
-  (while (and (= (c@ (+ a (@ STRI))) (c@ (+ b (@ STRI))))
-              (!= (c@ (+ a (@ STRI))) 0))
+  (while (and (= (byte-ref a STRI) (byte-ref b STRI))
+              (!= (byte-ref a STRI) 0))
     (! STRI (+ (@ STRI) 1)))
-  (= (c@ (+ a (@ STRI))) (c@ (+ b (@ STRI)))))
+  (= (byte-ref a STRI) (byte-ref b STRI)))
 
 (def print_str ((s : (ptr byte))) : void [nondet]
   (! PRINTI 0)
-  (while (!= (c@ (+ s (@ PRINTI))) 0)
-    (emit (c@ (+ s (@ PRINTI))))
+  (while (!= (byte-ref s PRINTI) 0)
+    (emit (byte-ref s PRINTI))
     (! PRINTI (+ (@ PRINTI) 1))))
 
 ;; print a signed integer in decimal
@@ -96,13 +96,13 @@
       ;; extract digits, remainder in REM
       (! PN_IDX 0)
       (while (< 0 (@ PN_VAL))
-        (c! (+ PN_BUF (@ PN_IDX)) (+ ASCII_0 (mod (@ PN_VAL) 10)))
+        (byte-set! PN_BUF PN_IDX (+ ASCII_0 (mod (@ PN_VAL) 10)))
         (! PN_VAL (/ (@ PN_VAL) 10))
         (! PN_IDX (+ (@ PN_IDX) 1)))
       ;; emit reversed
       (while (< 0 (@ PN_IDX))
         (! PN_IDX (- (@ PN_IDX) 1))
-        (emit (c@ (+ PN_BUF (@ PN_IDX))))))))
+        (emit (byte-ref PN_BUF PN_IDX))))))
 
 ;; ============================================================
 ;; dictionary
@@ -122,10 +122,10 @@
   (let ((h (@ HERE)))
 
     (! NAMEI 0)
-    (while (!= (c@ (+ name (@ NAMEI))) 0)
-      (c! (+ (+ h DICT_HDR_SIZE) (@ NAMEI)) (c@ (+ name (@ NAMEI))))
+    (while (!= (byte-ref name NAMEI) 0)
+      (byte-set! (+ h DICT_HDR_SIZE) NAMEI (byte-ref name NAMEI))
       (! NAMEI (+ (@ NAMEI) 1)))
-    (c! (+ (+ h DICT_HDR_SIZE) (@ NAMEI)) 0)
+    (byte-set! (+ h DICT_HDR_SIZE) NAMEI 0)
 
     (! h (@ LATEST))                          ; link
     (! (+ h DICT_NAME_OFF) (+ h DICT_HDR_SIZE))  ; name ptr -> copied string
@@ -190,9 +190,9 @@
   (! ITER 0)
   (while (do (! CHAR (key))
              (and (!= (@ CHAR) EOF) (!= (@ CHAR) NEWLINE)))
-    (c! (+ LBUF (@ ITER)) (@ CHAR))
+    (byte-set! LBUF ITER (@ CHAR))
     (! ITER (+ (@ ITER) 1)))
-  (c! (+ LBUF (@ ITER)) 0)
+  (byte-set! LBUF ITER 0)
   (if (and (= (@ CHAR) EOF) (= (@ ITER) 0))
     EOF
     (@ ITER)))
@@ -208,20 +208,20 @@
 ;; returns word length (0 = end of line)
 (def tok_next () : int [semidet]
   ;; skip spaces
-  (while (= (c@ (+ LBUF (@ LPOS))) SPACE)
+  (while (= (byte-ref LBUF LPOS) SPACE)
     (! LPOS (+ (@ LPOS) 1)))
 
-  (if (= (c@ (+ LBUF (@ LPOS))) 0)
+  (if (= (byte-ref LBUF LPOS) 0)
     0
     (do
 
       (! ITER 0)
-      (while (and (!= (c@ (+ LBUF (@ LPOS))) 0)
-                  (!= (c@ (+ LBUF (@ LPOS))) SPACE))
-        (c! (+ WBUF (@ ITER)) (c@ (+ LBUF (@ LPOS))))
+      (while (and (!= (byte-ref LBUF LPOS) 0)
+                  (!= (byte-ref LBUF LPOS) SPACE))
+        (byte-set! WBUF ITER (byte-ref LBUF LPOS))
         (! ITER (+ (@ ITER) 1))
         (! LPOS (+ (@ LPOS) 1)))
-      (c! (+ WBUF (@ ITER)) 0)
+      (byte-set! WBUF ITER 0)
       (@ ITER))))
 
 ;; ============================================================
@@ -235,18 +235,18 @@
   (! PN_POS 0)
   (! PN_SIGN 1)
   (! PN_ACC 0)
-  ;; optional leading minus
-  (if (= (c@ WBUF) MINUS_CHAR)
+  ;; optional leading minus (PN_POS is still 0 here)
+  (if (= (byte-ref WBUF PN_POS) MINUS_CHAR)
     (do (! PN_SIGN -1) (! PN_POS 1))
     (! PN_ACC 0))
 
-  (if (= (c@ (+ WBUF (@ PN_POS))) 0)
+  (if (= (byte-ref WBUF PN_POS) 0)
     false
     (do
       (! PN_OK 1)
-      (while (and (!= (c@ (+ WBUF (@ PN_POS))) 0)
+      (while (and (!= (byte-ref WBUF PN_POS) 0)
                   (= (@ PN_OK) 1))
-        (let ((c (c@ (+ WBUF (@ PN_POS)))))
+        (let ((c (byte-ref WBUF PN_POS)))
           (if (and (<= ASCII_0 c) (<= c ASCII_9))
             (do
               (! PN_ACC (+ (* (@ PN_ACC) 10) (- c ASCII_0)))
@@ -269,10 +269,10 @@
 ;; copy WBUF to CNAME
 (def save_name () : void [semidet]
   (! STRI 0)
-  (while (!= (c@ (+ WBUF (@ STRI))) 0)
-    (c! (+ CNAME (@ STRI)) (c@ (+ WBUF (@ STRI))))
+  (while (!= (byte-ref WBUF STRI) 0)
+    (byte-set! CNAME STRI (byte-ref WBUF STRI))
     (! STRI (+ (@ STRI) 1)))
-  (c! (+ CNAME (@ STRI)) 0))
+  (byte-set! CNAME STRI 0))
 
 ;; : — start a colon definition
 (def f_colon () : void [semidet]

@@ -2,6 +2,15 @@
 (const true  bool 1)
 (const false bool 0)
 
+;; ---- byte buffer accessors ----
+;; idx is the address of the index cell, not its value — callers pass the
+;; cursor variable itself (e.g. LPOS) rather than dereferencing it first.
+(def byte-ref ((buf : (ptr byte)) (idx : (ptr int))) : byte [semidet]
+  (c@ (+ buf (@ idx))))
+
+(def byte-set! ((buf : (ptr byte)) (idx : (ptr int)) (val : int)) : void [semidet]
+  (c! (+ buf (@ idx)) val))
+
 ;; ---- VM registers (memory-mapped) ----
 (const VM_SP  int ($vm-sp))
 (const VM_RP  int ($vm-rp))
