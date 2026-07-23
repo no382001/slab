@@ -2,6 +2,7 @@ _build/
 gen/
 programs/*.bin
 examples/chip8/*.bin
+examples/forth/*.bin
 
 vm
 codegen

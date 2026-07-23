@@ -1,8 +1,6 @@
 ($include "core.sets")
 
-;; ---- catch frame stack ----
-;; Each frame: saved_RP (2 bytes) + saved_DSP (2 bytes) = 4 bytes
-;; 8 frames max = 32 bytes
+;; ---- catch frame stack: 8 frames of saved_RP(2) + saved_DSP(2) ----
 ($alloc THROWN   2)    ; error code from throw (0 = none)
 ($alloc CF_SP    2)    ; catch frame stack pointer (byte offset)
 ($alloc CF_BASE 32)    ; catch frame stack (8 frames)
@@ -12,23 +10,18 @@
   (! CF_SP 0)
   (! THROWN 0))
 
-;; push a catch frame — saves VM RP and Forth DSP
-;; Save RP-1 (skipping catch_push's own return addr) so that when throw
-;; restores RP and RETs it pops the *caller's* return addr.
+;; RP-1 skips catch_push's own return addr, so throw's restore+ret
+;; pops the *caller's* return addr instead
 (def catch_push () : void [semidet]
   (! (+ CF_BASE (@ CF_SP)) (- (@ VM_RP) 1))
   (! (+ CF_BASE (+ (@ CF_SP) 2)) (@ DSP))
   (! CF_SP (+ (@ CF_SP) 4)))
 
-;; pop a catch frame (normal return path)
 (def catch_pop () : void [semidet]
   (! CF_SP (- (@ CF_SP) 4)))
 
-;; throw — restore state to most recent catch frame and unwind
-;; ( error-code -- )
-;; VM_RP is set AFTER all let cleanups so rack-based let vars are already
-;; popped before the non-local RP restore; f_throw's own ret then jumps to
-;; the catch site.
+;; VM_RP is restored after let cleanups pop their rack vars, so f_throw's
+;; own ret lands at the catch site, not wherever it was called from
 (def f_throw () : void [nondet]
   (let ((code (ds_pop)))
     (if (= (@ CF_SP) 0)

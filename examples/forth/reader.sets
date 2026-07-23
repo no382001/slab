@@ -1,0 +1,176 @@
+;; ============================================================
+;; string utilities
+;; ============================================================
+
+(def streq ((a : (ptr byte)) (b : (ptr byte))) : bool [semidet]
+  (local ((i 0))
+    (while (and (= (byte-ref a i) (byte-ref b i))
+                (!= (byte-ref a i) 0))
+      (! i (+ (@ i) 1)))
+    (= (byte-ref a i) (byte-ref b i))))
+
+(def print_str ((s : (ptr byte))) : void [nondet]
+  (local ((i 0))
+    (while (!= (byte-ref s i) 0)
+      (emit (byte-ref s i))
+      (! i (+ (@ i) 1)))))
+
+;; print a signed integer in decimal
+(def print_num ((n : int)) : void [nondet]
+  (if (= n 0)
+    (emit ASCII_0)
+    (local ((val (if (< n 0) (do (emit MINUS_CHAR) (- 0 n)) n)) (idx 0))
+      (while (< 0 (@ val))
+        (byte-set! PN_BUF idx (+ ASCII_0 (mod (@ val) 10)))
+        (! val (/ (@ val) 10))
+        (! idx (+ (@ idx) 1)))
+      ;; emit reversed
+      (while (< 0 (@ idx))
+        (! idx (- (@ idx) 1))
+        (emit (byte-ref PN_BUF idx))))))
+
+;; ============================================================
+;; dictionary
+;; ============================================================
+
+(def dict_init () : void [semidet]
+  (! LATEST 0)
+  (! HERE HEAP))
+
+(def dict_check () : void [nondet]
+  (if (< HEAP_LIMIT (@ HERE))
+    (do (print_str "assert: heap overflow") (emit NEWLINE) (assert-fail))
+    (! NOOP 0)))
+
+(def dict_add ((name : (ptr byte)) (xt : int)) : void [nondet]
+  (dict_check)
+  (let ((h (@ HERE)))
+    (local ((namei 0))
+      (while (!= (byte-ref name namei) 0)
+        (byte-set! (+ h DICT_HDR_SIZE) namei (byte-ref name namei))
+        (! namei (+ (@ namei) 1)))
+      (byte-set! (+ h DICT_HDR_SIZE) namei 0)
+
+      (! h (@ LATEST))                          ; link
+      (! (+ h DICT_NAME_OFF) (+ h DICT_HDR_SIZE))  ; name ptr -> copied string
+      (! (+ h DICT_XT_OFF) xt)                  ; xt
+      (! LATEST h)
+
+      (! HERE (+ (+ h DICT_HDR_SIZE) (+ (@ namei) 1))))))
+
+(def dict_find ((name : (ptr byte))) : int [semidet]
+  (local ((walker (@ LATEST)) (found 0))
+    (while (and (!= (@ walker) 0) (= (@ found) 0))
+      (if (streq name (@ (+ (@ walker) DICT_NAME_OFF)))
+        (! found (@ (+ (@ walker) DICT_XT_OFF)))
+        (! walker (@ (@ walker)))))
+    (@ found)))
+
+(def dict_words () : void [nondet]
+  (local ((iter (@ LATEST)))
+    (while (!= (@ iter) 0)
+      (print_str (@ (+ (@ iter) DICT_NAME_OFF)))
+      (emit SPACE)
+      (! iter (@ (@ iter))))
+    (emit NEWLINE)))
+
+;; ============================================================
+;; Forth data stack
+;; ============================================================
+
+(def ds_init () : void [semidet]
+  (! DSP DSB))
+
+(def ds_push ((v : int)) : void [semidet]
+  (! (@ DSP) v)
+  (! DSP (+ (@ DSP) 2)))
+
+(def ds_pop () : int [semidet]
+  (! DSP (- (@ DSP) 2))
+  (@ (@ DSP)))
+
+(def ds_depth () : int [semidet]
+  (/ (- (@ DSP) DSB) 2))
+
+;; print stack contents: <n> elem1 elem2 ... top
+(def ds_show () : void [nondet]
+  (emit 60)
+  (print_num (ds_depth))
+  (emit 62)
+  (emit SPACE)
+  (local ((iter DSB))
+    (while (< (@ iter) (@ DSP))
+      (print_num (@ (@ iter)))
+      (emit SPACE)
+      (! iter (+ (@ iter) 2)))))
+
+;; ============================================================
+;; input
+;; ============================================================
+
+;; read a line into LBUF, null-terminate, return length (-1 on EOF)
+(def read_line () : int [nondet]
+  (local ((iter 0) (char 0))
+    (while (do (! char (key))
+               (and (!= (@ char) EOF) (!= (@ char) NEWLINE)))
+      (byte-set! LBUF iter (@ char))
+      (! iter (+ (@ iter) 1)))
+    (byte-set! LBUF iter 0)
+    (if (and (= (@ char) EOF) (= (@ iter) 0))
+      EOF
+      (@ iter))))
+
+;; ============================================================
+;; tokenizer — walk LBUF extracting space-delimited words
+;; ============================================================
+
+(def tok_init () : void [semidet]
+  (! LPOS 0))
+
+;; skip spaces, copy next word into WBUF, null-terminate
+;; returns word length (0 = end of line)
+(def tok_next () : int [semidet]
+  ;; skip spaces
+  (while (= (byte-ref LBUF LPOS) SPACE)
+    (! LPOS (+ (@ LPOS) 1)))
+
+  (if (= (byte-ref LBUF LPOS) 0)
+    0
+    (local ((iter 0))
+      (while (and (!= (byte-ref LBUF LPOS) 0)
+                  (!= (byte-ref LBUF LPOS) SPACE))
+        (byte-set! WBUF iter (byte-ref LBUF LPOS))
+        (! iter (+ (@ iter) 1))
+        (! LPOS (+ (@ LPOS) 1)))
+      (byte-set! WBUF iter 0)
+      (@ iter))))
+
+;; ============================================================
+;; number parsing
+;; ============================================================
+
+;; try to parse WBUF as a signed decimal integer
+;; returns true if success (result in PN_ACC), false if not a number
+(def parse_num () : bool [semidet]
+  (local ((pos 0) (sign 1) (ok 1))
+    (! PN_ACC 0)
+    ;; optional leading minus (pos is still 0 here)
+    (if (= (byte-ref WBUF pos) MINUS_CHAR)
+      (do (! sign -1) (! pos 1))
+      (! PN_ACC 0))
+
+    (if (= (byte-ref WBUF pos) 0)
+      false
+      (do
+        (while (and (!= (byte-ref WBUF pos) 0)
+                    (= (@ ok) 1))
+          (let ((c (byte-ref WBUF pos)))
+            (if (and (<= ASCII_0 c) (<= c ASCII_9))
+              (do
+                (! PN_ACC (+ (* (@ PN_ACC) 10) (- c ASCII_0)))
+                (! pos (+ (@ pos) 1)))
+              (! ok 0))))
+        (if (= (@ ok) 1)
+          (do (! PN_ACC (* (@ PN_ACC) (@ sign)))
+              true)
+          false)))))

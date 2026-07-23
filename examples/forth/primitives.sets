@@ -1,0 +1,198 @@
+;; ============================================================
+;; Forth primitives — each is a plain function
+;; ============================================================
+
+;; emit a cell to HERE, advance HERE by 2
+(def emit_cell ((v : int)) : void [semidet]
+  (! (@ HERE) v)
+  (! HERE (+ (@ HERE) 2)))
+
+;; copy WBUF to CNAME
+(def save_name () : void [semidet]
+  (local ((i 0))
+    (while (!= (byte-ref WBUF i) 0)
+      (byte-set! CNAME i (byte-ref WBUF i))
+      (! i (+ (@ i) 1)))
+    (byte-set! CNAME i 0)))
+
+;; : — start a colon definition
+(def f_colon () : void [semidet]
+  (tok_next)        ; read name token
+  (save_name)       ; save it
+  (! CSTART (@ HERE))  ; mark code start
+  (! STATE 1))  ; enter compile mode
+
+;; ; — end a colon definition (immediate)
+(def f_semi () : void [nondet]
+  (emit_cell ($op ret))    ; emit RET opcode
+  (dict_add CNAME (@ CSTART))
+  (! STATE 0))  ; back to interpret mode
+
+(def f_dot () : void [nondet]
+  (print_num (ds_pop)) (emit SPACE))
+
+(def f_add () : void [semidet]
+  (let ((b (ds_pop))) (ds_push (+ (ds_pop) b))))
+
+(def f_sub () : void [semidet]
+  (let ((b (ds_pop))) (ds_push (- (ds_pop) b))))
+
+(def f_mul () : void [semidet]
+  (let ((b (ds_pop))) (ds_push (* (ds_pop) b))))
+
+(def f_div () : void [semidet]
+  (let ((b (ds_pop))) (ds_push (/ (ds_pop) b))))
+
+(def f_mod () : void [semidet]
+  (let ((b (ds_pop))) (ds_push (mod (ds_pop) b))))
+
+(def f_dup () : void [semidet]
+  (let ((a (ds_pop))) (ds_push a) (ds_push a)))
+
+(def f_swap () : void [semidet]
+  (let ((b (ds_pop))) (let ((a (ds_pop))) (ds_push b) (ds_push a))))
+
+(def f_drop () : void [semidet]
+  (ds_pop) (! NOOP 0))
+
+(def f_over () : void [semidet]
+  (let ((b (ds_pop))) (let ((a (ds_pop))) (ds_push a) (ds_push b) (ds_push a))))
+
+(def f_eq () : void [semidet]
+  (let ((b (ds_pop))) (if (= (ds_pop) b) (ds_push -1) (ds_push 0))))
+
+(def f_lt () : void [semidet]
+  (let ((b (ds_pop))) (if (< (ds_pop) b) (ds_push -1) (ds_push 0))))
+
+(def f_gt () : void [semidet]
+  (let ((b (ds_pop))) (if (< b (ds_pop)) (ds_push -1) (ds_push 0))))
+
+(def f_zeq () : void [semidet]
+  (if (= (ds_pop) 0) (ds_push -1) (ds_push 0)))
+
+(def f_negate () : void [semidet]
+  (ds_push (- 0 (ds_pop))))
+
+(def f_abs () : void [semidet]
+  (let ((a (ds_pop))) (if (< a 0) (ds_push (- 0 a)) (ds_push a))))
+
+(def f_max () : void [semidet]
+  (let ((b (ds_pop))) (let ((a (ds_pop))) (if (< a b) (ds_push b) (ds_push a)))))
+
+(def f_dot_s () : void [nondet]
+  (ds_show))
+
+(def f_cr () : void [nondet]
+  (emit NEWLINE))
+
+(def f_emit () : void [nondet]
+  (emit (ds_pop)))
+
+(def f_and () : void [semidet]
+  (let ((b (ds_pop))) (ds_push (and (ds_pop) b))))
+
+(def f_or () : void [semidet]
+  (let ((b (ds_pop))) (ds_push (or (ds_pop) b))))
+
+(def f_xor () : void [semidet]
+  (let ((b (ds_pop))) (ds_push (xor (ds_pop) b))))
+
+(def f_words () : void [nondet]
+  (dict_words))
+
+(def f_bye () : void [nondet]
+  (bye))
+
+(def f_fetch () : void [semidet]
+  (ds_push (@ (ds_pop))))
+
+(def f_store () : void [semidet]
+  (let ((addr (ds_pop)))
+    (let ((val (ds_pop)))
+      (! addr val))))
+
+(def f_2dup () : void [semidet]
+  (let ((b (ds_pop)))
+    (let ((a (ds_pop)))
+      (ds_push a) (ds_push b) (ds_push a) (ds_push b))))
+
+(def f_2drop () : void [semidet]
+  (ds_pop) (ds_pop) (! NOOP 0))
+
+(def f_variable () : void [nondet]
+  (tok_next)
+  (save_name)
+  (let ((data_addr (@ HERE)))
+    (! HERE (+ (@ HERE) 2))
+    (! data_addr 0)
+    (let ((stub (@ HERE)))
+      (emit_cell ($op lit))
+      (emit_cell data_addr)
+      (emit_cell ($op call))
+      (emit_cell (addr ds_push))
+      (emit_cell ($op ret))
+      (dict_add CNAME stub))))
+
+(def f_constant () : void [nondet]
+  (tok_next)
+  (save_name)
+  (let ((val (ds_pop)))
+    (let ((stub (@ HERE)))
+      (emit_cell ($op lit))
+      (emit_cell val)
+      (emit_cell ($op call))
+      (emit_cell (addr ds_push))
+      (emit_cell ($op ret))
+      (dict_add CNAME stub))))
+
+;; immediate compile-mode words, called directly, not via dictionary.
+;; branches bridge to the native VM stack via CALL ds_pop before ZBRANCH.
+
+(def f_if () : void [semidet]
+  (emit_cell ($op call))
+  (emit_cell (addr ds_pop))
+  (emit_cell ($op zbranch))
+  (emit_cell 0)
+  (ds_push (- (@ HERE) 2)))
+
+(def f_then () : void [semidet]
+  (! (ds_pop) (@ HERE)))
+
+(def f_else () : void [semidet]
+  (emit_cell ($op branch))
+  (emit_cell 0)
+  (let ((new_patch (- (@ HERE) 2)))
+    (let ((old_patch (ds_pop)))
+      (! old_patch (@ HERE))
+      (ds_push new_patch))))
+
+(def f_begin () : void [semidet]
+  (ds_push (@ HERE)))
+
+(def f_until () : void [semidet]
+  (emit_cell ($op call))
+  (emit_cell (addr ds_pop))
+  (emit_cell ($op zbranch))
+  (emit_cell (ds_pop)))
+
+(def f_while () : void [semidet]
+  (emit_cell ($op call))
+  (emit_cell (addr ds_pop))
+  (emit_cell ($op zbranch))
+  (emit_cell 0)
+  (ds_push (- (@ HERE) 2)))
+
+(def f_repeat () : void [semidet]
+  (let ((patch (ds_pop)))
+    (let ((begin_addr (ds_pop)))
+      (emit_cell ($op branch))
+      (emit_cell begin_addr)
+      (! patch (@ HERE)))))
+
+(def f_again () : void [semidet]
+  (emit_cell ($op branch))
+  (emit_cell (ds_pop)))
+
+(def f_recurse () : void [semidet]
+  (emit_cell ($op call))
+  (emit_cell (@ CSTART)))

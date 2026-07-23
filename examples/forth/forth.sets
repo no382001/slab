@@ -1,0 +1,116 @@
+;; ---- heap ----
+;; Must be below SlotStart (= FinalPtr after all $alloc).
+;; Code is ~5KB; 8192 gives safe margin and is far below SlotStart (~35036).
+($section 8192)
+($alloc HEAP 0)
+(const HEAP_LIMIT int 32000) ; must stay below SlotStart (~35036)
+
+;; ---- scratch cells ----
+($section 32768)
+($alloc NOOP 2)
+
+;; ---- ASCII character constants ----
+($include "../../lib/ascii.sets")
+(const EOF int -1)
+
+;; ---- dictionary entry layout: link(2) name-ptr(2) xt(2) name-bytes... ----
+(const DICT_NAME_OFF int 2)
+(const DICT_XT_OFF   int 4)
+(const DICT_HDR_SIZE int 6)
+
+;; ---- print_num / parse_num shared state ----
+($alloc PN_BUF 12)
+($alloc PN_ACC  2)   ; parse_num's result, TODO: returning multiple values could be useful in cases like these?
+
+;; ---- dictionary / interpreter state ----
+($alloc LATEST 2)
+($alloc HERE   2)
+($alloc STATE  2)    ; 0 = interpret, 1 = compile
+($alloc DSP    2)    ; data stack pointer (cell addr)
+($alloc LPOS   2)    ; tokenizer position in LBUF
+
+;; ---- colon definition state ----
+($alloc CSTART 2)    ; code start address for current : definition
+
+;; ---- I/O buffers ----
+($section 33000)
+($alloc LBUF 256)     ; line buffer
+($alloc WBUF 256)     ; word token buffer
+($alloc CNAME 256)    ; colon def name buffer
+
+;; ---- Forth data stack ----
+;; stack grows upward: DSP points to next free slot
+($section 34000)
+($alloc DSB 512)      ; data stack base (256 cells)
+
+;; ---- included stdlib (catch/throw) ----
+;; stdlib uses $alloc for CF_SP, THROWN, CF_BASE (32 bytes)
+($section 35000)
+($include "../../lib/stdlib.sets")
+
+;; ---- interpreter, split across files for readability ----
+($include "reader.sets")
+($include "primitives.sets")
+($include "compile.sets")
+
+;; ============================================================
+;; main
+;; ============================================================
+
+(def main () : void [nondet]
+  (dict_init)
+  (ds_init)
+  (catch_init)
+
+  ;; populate dictionary — xt is the real code address
+  (dict_add "bye"    (addr f_bye))
+  (dict_add "."      (addr f_dot))
+  (dict_add "+"      (addr f_add))
+  (dict_add "-"      (addr f_sub))
+  (dict_add "*"      (addr f_mul))
+  (dict_add "/"      (addr f_div))
+  (dict_add "dup"    (addr f_dup))
+  (dict_add "swap"   (addr f_swap))
+  (dict_add "drop"   (addr f_drop))
+  (dict_add "over"   (addr f_over))
+  (dict_add "="      (addr f_eq))
+  (dict_add "<"      (addr f_lt))
+  (dict_add ">"      (addr f_gt))
+  (dict_add "0="     (addr f_zeq))
+  (dict_add "negate" (addr f_negate))
+  (dict_add "abs"    (addr f_abs))
+  (dict_add "words"  (addr f_words))
+  (dict_add "max"    (addr f_max))
+  (dict_add ".s"     (addr f_dot_s))
+  (dict_add "cr"     (addr f_cr))
+  (dict_add "emit"   (addr f_emit))
+  (dict_add "and"    (addr f_and))
+  (dict_add "or"     (addr f_or))
+  (dict_add "xor"    (addr f_xor))
+  (dict_add "mod"    (addr f_mod))
+  (dict_add "throw"  (addr f_throw))
+  (dict_add "@"      (addr f_fetch))
+  (dict_add "!"      (addr f_store))
+  (dict_add "2dup"   (addr f_2dup))
+  (dict_add "2drop"  (addr f_2drop))
+  (dict_add "variable" (addr f_variable))
+  (dict_add "constant" (addr f_constant))
+
+  (dict_add ":"      (addr f_colon))
+
+  (print_str "sets forth")
+  (emit NEWLINE)
+
+  (while true
+    (let ((len (read_line)))
+      (if (= len EOF) (do (print_str "got eof, exiting...") (emit NEWLINE) (bye))
+        (if (< 0 len)
+          (do
+            (! THROWN 0)
+            (run_line)
+            (if (= (@ THROWN) 0)
+              (do (print_str " ok") (emit NEWLINE))
+              (do (print_str "error: ")
+                  (print_num (@ THROWN))
+                  (emit NEWLINE))))
+          (! NOOP 0))))))

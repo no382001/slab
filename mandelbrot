@@ -2,11 +2,18 @@
 set -e
 
 dir="$(cd "$(dirname "$0")" && pwd)"
-src="$dir/programs/forth.sets"
-bin="$dir/programs/forth.bin"
-fth="$dir/programs/mandelbrot.fth"
+forth_dir="$dir/examples/forth"
+src="$forth_dir/forth.sets"
+bin="$forth_dir/forth.bin"
+fth="$forth_dir/mandelbrot.fth"
 
-if [ ! -f "$bin" ] || [ "$src" -nt "$bin" ]; then
+needs_build=0
+[ ! -f "$bin" ] && needs_build=1
+for f in "$forth_dir"/*.sets; do
+  [ "$f" -nt "$bin" ] && needs_build=1
+done
+
+if [ "$needs_build" = 1 ]; then
   echo "compiling forth.sets..."
   cd "$dir/compiler"
   scryer-prolog -f -g "use_module(compiler), compile_file('$src', '$bin'), halt." < /dev/null

@@ -1,0 +1,56 @@
+;; ============================================================
+;; case-like dispatch over a flat run of (name-string, handler-addr) pairs
+;; ============================================================
+
+(def dispatch_immediate ((word : (ptr byte)) (rest : int ...)) : bool [nondet]
+  (local ((i 0) (hit 0))
+    (while (and (< (@ i) rest-count) (= (@ hit) 0))
+      (if (streq word (@ (+ rest (* (@ i) 2))))
+        (do (execute (@ (+ rest (* (+ (@ i) 1) 2))))
+            (! hit 1))
+        (! hit 0))
+      (! i (+ (@ i) 2)))
+    (!= (@ hit) 0)))
+
+;; ============================================================
+;; interpret one word (in WBUF)
+;; ============================================================
+
+(def interpret_word () : void [nondet]
+  (if (= (@ STATE) 0)
+    ;; --- interpret mode ---
+    (let ((xt (dict_find WBUF)))
+      (if (!= xt 0)
+        (execute xt)
+        (if (parse_num)
+          (ds_push (@ PN_ACC))
+          (do (print_str WBUF) (print_str " ?") (emit NEWLINE)))))
+    ;; --- compile mode ---
+    (if (dispatch_immediate WBUF
+          ";"       (addr f_semi)
+          "if"      (addr f_if)
+          "then"    (addr f_then)
+          "else"    (addr f_else)
+          "begin"   (addr f_begin)
+          "until"   (addr f_until)
+          "while"   (addr f_while)
+          "repeat"  (addr f_repeat)
+          "again"   (addr f_again)
+          "recurse" (addr f_recurse))
+      (! NOOP 0)
+      (let ((xt (dict_find WBUF)))
+        (if (!= xt 0)
+          (do (emit_cell ($op call)) (emit_cell xt))
+          (if (parse_num)
+            (do (emit_cell ($op lit)) (emit_cell (@ PN_ACC))
+                (emit_cell ($op call)) (emit_cell (addr ds_push)))
+            (do (print_str WBUF) (print_str " ?") (emit NEWLINE))))))))
+
+;; run all tokens on a line, wrapped in catch
+;; catch_push saves RP here; if throw fires, we return from run_line early
+(def run_line () : void [nondet]
+  (catch_push)
+  (tok_init)
+  (while (< 0 (tok_next))
+    (interpret_word))
+  (catch_pop))
