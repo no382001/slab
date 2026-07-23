@@ -30,6 +30,10 @@ builtin_env(Env) :-
 
 build_func_env([], Env, Env).
 build_func_env([def(Name, Params, RetType, _, _Body) | Rest], Acc, Env) :-
+    append(FixedParams, [rest_param(_, RestType)], Params), !,
+    param_types(FixedParams, PTypes),
+    build_func_env(Rest, [funcv(Name, PTypes, RestType, RetType) | Acc], Env).
+build_func_env([def(Name, Params, RetType, _, _Body) | Rest], Acc, Env) :-
     param_types(Params, PTypes),
     build_func_env(Rest, [func(Name, PTypes, RetType) | Acc], Env).
 build_func_env([extern(Name, PTypes, RetType) | Rest], Acc, Env) :-
@@ -69,6 +73,10 @@ check_def(def(Name, Params, RetType, _, Body), FuncEnv, Errors) :-
 params_to_env([], []).
 params_to_env([param(N, T) | Rest], [var(N, T) | Env]) :-
     params_to_env(Rest, Env).
+params_to_env([rest_param(N, T)], [var(N, ptr(T)), var(CountName, int)]) :-
+    rest_count_name(N, CountName).
+
+rest_count_name(Name, CountName) :- atom_concat(Name, '-count', CountName).
 
 %% ============================================================
 %% check function body (list of exprs, last one is return value)
@@ -187,6 +195,8 @@ infer(Env, FEnv, 'c!'(Addr, Val), void) :-
 %% addr: get function address -> int
 infer(_, FEnv, addr(Name), int) :-
     member(func(Name, _, _), FEnv).
+infer(_, FEnv, addr(Name), int) :-
+    member(funcv(Name, _, _, _), FEnv).
 
 %% execute: indirect call -> void
 infer(Env, FEnv, execute(E), void) :-
@@ -203,6 +213,17 @@ infer(Env, FEnv, call(Name, Args), RetType) :-
     length(ParamTypes, Arity),
     length(Args, Arity),
     check_args(Args, ParamTypes, Env, FEnv).
+
+%% variadic function call
+infer(Env, FEnv, call(Name, Args), RetType) :-
+    member(funcv(Name, ParamTypes, RestType, RetType), FEnv),
+    length(ParamTypes, FixedArity),
+    length(Args, TotalArgs),
+    TotalArgs >= FixedArity,
+    length(FixedArgs, FixedArity),
+    append(FixedArgs, RestArgs, Args),
+    check_args(FixedArgs, ParamTypes, Env, FEnv),
+    check_rest_args(RestArgs, RestType, Env, FEnv).
 
 %% ============================================================
 %% helpers
@@ -243,6 +264,12 @@ check_args([A | As], [T | Ts], Env, FEnv) :-
     infer(Env, FEnv, A, AT),
     types_compatible(T, AT),
     check_args(As, Ts, Env, FEnv).
+
+check_rest_args([], _, _, _).
+check_rest_args([A | As], T, Env, FEnv) :-
+    infer(Env, FEnv, A, AT),
+    types_compatible(T, AT),
+    check_rest_args(As, T, Env, FEnv).
 
 %% int and byte are interchangeable for arithmetic
 %% bool is separate

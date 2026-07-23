@@ -4,6 +4,7 @@
 
 :- dynamic(user_void_func/1).
 :- dynamic(ext_trap/3). % ext_trap(Name, Code, Ret)
+:- dynamic(variadic_func/3). % variadic_func(Name, FixedArity, MaxRest)
 
 %% ============================================================
 %% entry
@@ -13,6 +14,7 @@ compile_program(Defs, SlotBase, ok(Code)) :-
     collect_consts(Defs, Consts),
     register_void_funcs(Defs),
     register_ext_traps(Defs),
+    register_variadic_funcs(Defs),
     %% Align SlotBase to next even boundary (slots are 2 bytes)
     SlotBase0 is SlotBase + (SlotBase mod 2),
     %% Ensure slots start above 16384 minimum even without $alloc globals
@@ -43,6 +45,74 @@ register_ext_traps_([extern(Name, Code, _, Ret) | Rest]) :-
 register_ext_traps_([_ | Rest]) :-
     register_ext_traps_(Rest).
 
+register_variadic_funcs(Defs) :-
+    retractall(variadic_func(_, _, _)),
+    findall(Name-FixedArity, variadic_def_arity(Defs, Name, FixedArity), FixedList),
+    all_calls_in_defs(Defs, AllCalls),
+    register_variadic_funcs_(FixedList, AllCalls).
+
+variadic_def_arity(Defs, Name, FixedArity) :-
+    member(def(Name, Params, _, _, _), Defs),
+    append(FixedParams, [rest_param(_, _)], Params),
+    length(FixedParams, FixedArity).
+
+register_variadic_funcs_([], _).
+register_variadic_funcs_([Name-FixedArity | Rest], AllCalls) :-
+    findall(RestCount,
+            ( member(call(Name, Args), AllCalls),
+              length(Args, TotalArgs),
+              RestCount is TotalArgs - FixedArity,
+              RestCount >= 0
+            ),
+            Counts),
+    ( Counts = [] -> Max = 0 ; list_max(Counts, Max) ),
+    assertz(variadic_func(Name, FixedArity, Max)),
+    register_variadic_funcs_(Rest, AllCalls).
+
+all_calls_in_defs([], []).
+all_calls_in_defs([def(_, _, _, _, Body) | Rest], Calls) :-
+    !,
+    collect_calls_list(Body, C1),
+    all_calls_in_defs(Rest, C2),
+    append(C1, C2, Calls).
+all_calls_in_defs([_ | Rest], Calls) :-
+    all_calls_in_defs(Rest, Calls).
+
+collect_calls(num(_), []).
+collect_calls(str(_), []).
+collect_calls(var(_), []).
+collect_calls(addr(_), []).
+collect_calls(inline(_), []).
+collect_calls(binop(_, A, B), Calls) :-
+    collect_calls(A, CA), collect_calls(B, CB), append(CA, CB, Calls).
+collect_calls(if(C, T, E), Calls) :-
+    collect_calls(C, CC), collect_calls(T, CT), collect_calls(E, CE),
+    append(CC, CT, C1), append(C1, CE, Calls).
+collect_calls(let(Bindings, Body), Calls) :-
+    collect_calls_bindings(Bindings, CB),
+    collect_calls_list(Body, CBody),
+    append(CB, CBody, Calls).
+collect_calls(do(Exprs), Calls) :- collect_calls_list(Exprs, Calls).
+collect_calls(while(Cond, Body), Calls) :-
+    collect_calls(Cond, CC), collect_calls_list(Body, CB), append(CC, CB, Calls).
+collect_calls('@'(E), Calls) :- collect_calls(E, Calls).
+collect_calls('c@'(E), Calls) :- collect_calls(E, Calls).
+collect_calls('!'(A, V), Calls) :-
+    collect_calls(A, CA), collect_calls(V, CV), append(CA, CV, Calls).
+collect_calls('c!'(A, V), Calls) :-
+    collect_calls(A, CA), collect_calls(V, CV), append(CA, CV, Calls).
+collect_calls(execute(E), Calls) :- collect_calls(E, Calls).
+collect_calls(call(Name, Args), [call(Name, Args) | Rest]) :-
+    collect_calls_list(Args, Rest).
+
+collect_calls_list([], []).
+collect_calls_list([E | Es], Calls) :-
+    collect_calls(E, CE), collect_calls_list(Es, CEs), append(CE, CEs, Calls).
+
+collect_calls_bindings([], []).
+collect_calls_bindings([bind(_, E) | Bs], Calls) :-
+    collect_calls(E, CE), collect_calls_bindings(Bs, CBs), append(CE, CBs, Calls).
+
 %% ============================================================
 %% collect top-level constants for inlining
 %% ============================================================
@@ -68,23 +138,76 @@ compile_def(extern(_, _, _, _), _, LN, Slot, [], LN, Slot).
 compile_def(const(_, _, _), _, LN, Slot, [], LN, Slot).
 
 compile_def(def(Name, Params, _RetType, _, Body), Consts, LN0, Slot0, Code, LN, SlotAfter) :-
-    alloc_params(Params, Slot0, ParamEnv, SlotParams),
-    reverse(ParamEnv, RevParams),
-    prologue(RevParams, PrologueCode),
-    compile_body(Body, ParamEnv, Consts, LN0, 0, BodyCode, LN),
+    alloc_params(Name, Params, Slot0, ParamEnv, RestInfo, SlotAfter),
+    build_prologue(RestInfo, ParamEnv, Consts, LN0, PrologueCode, LN1),
+    compile_body(Body, ParamEnv, Consts, LN1, 0, BodyCode, LN),
     append(PrologueCode, BodyCode, InnerCode),
-    append([label(Name) | InnerCode], [op(ret)], Code),
-    SlotAfter is SlotParams.
+    append([label(Name) | InnerCode], [op(ret)], Code).
 
-alloc_params([], Slot, [], Slot).
-alloc_params([param(Name, _Type) | Rest], Slot, [var(Name, Slot) | Env], SlotOut) :-
+alloc_params(Name, Params, Slot, Env, RestInfo, SlotOut) :-
+    ( append(FixedParams, [rest_param(RName, _RType)], Params) ->
+        variadic_func(Name, _FixedArity, Max),
+        alloc_fixed_params(FixedParams, Slot, FixedEnv, Slot1),
+        rest_count_name(RName, CountName),
+        CountSlot = Slot1,
+        RestSlot is Slot1 + 2,
+        RestBase is RestSlot + 2,
+        IterSlot is RestBase + (Max * 2),
+        SlotOut is IterSlot + 2,
+        Env = [var(RName, RestSlot), var(CountName, CountSlot) | FixedEnv],
+        RestInfo = rest(CountSlot, RestSlot, RestBase, IterSlot)
+    ;
+        alloc_fixed_params(Params, Slot, Env, SlotOut),
+        RestInfo = none
+    ).
+
+alloc_fixed_params([], Slot, [], Slot).
+alloc_fixed_params([param(Name, _Type) | Rest], Slot, [var(Name, Slot) | Env], SlotOut) :-
     Slot1 is Slot + 2,
-    alloc_params(Rest, Slot1, Env, SlotOut).
+    alloc_fixed_params(Rest, Slot1, Env, SlotOut).
+
+rest_count_name(Name, CountName) :- atom_concat(Name, '-count', CountName).
+
+build_prologue(none, ParamEnv, _Consts, LN, Code, LN) :-
+    reverse(ParamEnv, RevParams),
+    prologue(RevParams, Code).
+build_prologue(rest(CountSlot, RestSlot, RestBase, IterSlot), ParamEnv, Consts, LN0, Code, LN) :-
+    ParamEnv = [_, _ | FixedEnv],
+    reverse(FixedEnv, RevFixed),
+    prologue(RevFixed, FixedPrologueCode),
+    rest_prologue(CountSlot, RestSlot, RestBase, IterSlot, Consts, LN0, RestPrologueCode, LN),
+    append(RestPrologueCode, FixedPrologueCode, Code).
 
 prologue([], []).
 prologue([var(_, Addr) | Rest], Code) :-
     prologue(Rest, RestCode),
     append([lit(Addr), op(!)], RestCode, Code).
+
+rest_prologue(CountSlot, RestSlot, RestBase, IterSlot, Consts, LN0, Code, LN) :-
+    LoopConsts = [const(rest_iter_sym, IterSlot),
+                  const(rest_base_sym, RestBase),
+                  const(rest_count_sym, CountSlot)],
+    append(LoopConsts, Consts, ExtConsts),
+    PopCount = [lit(CountSlot), op(!)],
+    BindRestPtr = [lit(RestBase), lit(RestSlot), op(!)],
+    InitIter = '!'(var(rest_iter_sym), binop(-, '@'(var(rest_count_sym)), num(1))),
+    compile_expr(InitIter, [], ExtConsts, LN0, 0, InitIterCode, LN1),
+    Cond = binop(>=, '@'(var(rest_iter_sym)), num(0)),
+    compile_expr(Cond, [], ExtConsts, LN1, 0, CondCode, LN2),
+    AddrExpr = binop(+, var(rest_base_sym), binop(*, '@'(var(rest_iter_sym)), num(2))),
+    compile_expr(AddrExpr, [], ExtConsts, LN2, 0, AddrCode, LN3),
+    Decr = '!'(var(rest_iter_sym), binop(-, '@'(var(rest_iter_sym)), num(1))),
+    compile_expr(Decr, [], ExtConsts, LN3, 0, DecrCode, LN4),
+    genlabel(LN4, "_restpop_", StartL, LN5),
+    genlabel(LN5, "_restend_", EndL, LN),
+    append(AddrCode, [op(!)], StoreCode),
+    append(StoreCode, DecrCode, LoopBody),
+    append([label(StartL) | CondCode], [zbranch(EndL)], C1),
+    append(C1, LoopBody, C2),
+    append(C2, [branch(StartL), label(EndL)], LoopCode),
+    append(PopCount, BindRestPtr, C3),
+    append(C3, InitIterCode, C4),
+    append(C4, LoopCode, Code).
 
 %% ============================================================
 %% body: list of exprs; middle ones drop result, last keeps it
@@ -212,6 +335,14 @@ compile_expr(addr(Name), _, _, LN, _, [lit_label(Name)], LN).
 compile_expr(execute(E), Env, Consts, LN0, RD, Code, LN) :-
     compile_expr(E, Env, Consts, LN0, RD, EC, LN),
     append(EC, [op(execute)], Code).
+
+%% function call — variadic
+compile_expr(call(Name, Args), Env, Consts, LN0, RD, Code, LN) :-
+    variadic_func(Name, FixedArity, _Max), !,
+    compile_args(Args, Env, Consts, LN0, RD, ArgsCode, LN),
+    length(Args, TotalArgs),
+    RestCount is TotalArgs - FixedArity,
+    append(ArgsCode, [lit(RestCount), call(Name)], Code).
 
 %% function call
 compile_expr(call(Name, Args), Env, Consts, LN0, RD, Code, LN) :-

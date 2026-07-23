@@ -108,6 +108,11 @@ setup() {
   [[ "$result" == ok* ]]
 }
 
+@test "typecheck: variadic call accepts varying rest counts" {
+  result="$(compile '(def f ((a : int) (rest : int ...)) : int a) (def g () : int (+ (f 1) (+ (f 1 2 3) (f 1 2 3 4 5))))' typed)"
+  [[ "$result" == ok* ]]
+}
+
 # ============================================================
 # typecheck: should reject
 # ============================================================
@@ -129,6 +134,11 @@ setup() {
 
 @test "typecheck rejects: wrong arity" {
   result="$(compile '(def f ((x : int)) : int x) (def g () : int (f 1 2))' typed)"
+  [[ "$result" == error* ]]
+}
+
+@test "typecheck rejects: variadic call below fixed arity" {
+  result="$(compile '(def f ((a : int) (rest : int ...)) : int a) (def g () : int (f))' typed)"
   [[ "$result" == error* ]]
 }
 
@@ -179,6 +189,21 @@ setup() {
 @test "e2e: function call" {
   run run_program '(def add1 ((n : int)) : int (+ n 1)) (def main () : void (emit (add1 64)) (bye))'
   [ "$output" = "A" ]
+}
+
+@test "e2e: variadic function with no rest args" {
+  run run_program '(const ACC int 1024) (const IDX int 1026) (def sum_all ((first : int) (rest : int ...)) : int [semidet] (! ACC first) (! IDX 0) (while (< (@ IDX) rest-count) (! ACC (+ (@ ACC) (@ (+ rest (* (@ IDX) 2))))) (! IDX (+ (@ IDX) 1))) (@ ACC)) (def main () : void (emit (+ 48 (sum_all 5))) (bye))'
+  [ "$output" = "5" ]
+}
+
+@test "e2e: variadic function sums rest args" {
+  run run_program '(const ACC int 1024) (const IDX int 1026) (def sum_all ((first : int) (rest : int ...)) : int [semidet] (! ACC first) (! IDX 0) (while (< (@ IDX) rest-count) (! ACC (+ (@ ACC) (@ (+ rest (* (@ IDX) 2))))) (! IDX (+ (@ IDX) 1))) (@ ACC)) (def main () : void (emit (+ 48 (sum_all 1 2 3))) (bye))'
+  [ "$output" = "6" ]
+}
+
+@test "e2e: variadic function called with different rest counts" {
+  run run_program '(const ACC int 1024) (const IDX int 1026) (def sum_all ((first : int) (rest : int ...)) : int [semidet] (! ACC first) (! IDX 0) (while (< (@ IDX) rest-count) (! ACC (+ (@ ACC) (@ (+ rest (* (@ IDX) 2))))) (! IDX (+ (@ IDX) 1))) (@ ACC)) (def main () : void (emit (+ 48 (sum_all 5))) (emit (+ 48 (sum_all 1 2 3))) (emit (+ 48 (sum_all 1 1 1 1 1 1 1 1 1))) (bye))'
+  [ "$output" = "569" ]
 }
 
 @test "e2e: while loop" {

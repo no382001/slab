@@ -19,6 +19,7 @@ transform_program(Forms, Result) :-
 transform(list([sym(def), sym(Name), list(RawParams), sym(:), RetTy | BodyForms]),
           def(Name, Params, RetType, DeclEffect, Body)) :-
     maplist(transform_param, RawParams, Params),
+    valid_param_list(Params),
     transform_type(RetTy, RetType),
     parse_optional_effect(BodyForms, DeclEffect, ActualBody),
     maplist(transform, ActualBody, Body).
@@ -121,6 +122,16 @@ transform(list([sym(Name) | Args]), call(Name, TArgs)) :-
 transform_param(sym(Name), param(Name, int)).  % default type for now
 transform_param(list([sym(Name), sym(:), TypeSym]), param(Name, Type)) :-
     transform_type(TypeSym, Type).
+transform_param(list([sym(Name), sym(:), TypeSym, sym('...')]),
+                 rest_param(Name, Type)) :-
+    transform_type(TypeSym, Type).
+
+valid_param_list([]).
+valid_param_list([param(_, _)]).
+valid_param_list([rest_param(_, _)]).
+valid_param_list([param(_, _) | Rest]) :-
+    Rest = [_|_],
+    valid_param_list(Rest).
 
 transform_binding(list([sym(Name), Expr]), bind(Name, TE)) :-
     transform(Expr, TE).
