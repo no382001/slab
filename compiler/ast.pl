@@ -64,6 +64,12 @@ transform(list([sym(let), list(Bindings) | BodyForms]),
     maplist(transform_binding, Bindings, TransBindings),
     maplist(transform, BodyForms, Body).
 
+%% (local ((name expr) ...) body...)
+transform(list([sym(local), list(Bindings) | BodyForms]),
+          local(TransBindings, Body)) :-
+    maplist(transform_binding, Bindings, TransBindings),
+    maplist(transform, BodyForms, Body).
+
 %% (do expr...)  — sequence, returns last
 transform(list([sym(do) | Forms]),
           do(Exprs)) :-
@@ -163,7 +169,7 @@ binop(and). binop(or). binop(xor).
 binop(=). binop(<). binop(>).
 binop('!='). binop(<=). binop(>=).
 
-reserved(def). reserved(let). reserved(if). reserved(do).
+reserved(def). reserved(let). reserved(local). reserved(if). reserved(do).
 reserved(while). reserved(const). reserved(extern).
 reserved('@'). reserved('c@'). reserved('!'). reserved('c!').
 reserved(addr). reserved(execute).

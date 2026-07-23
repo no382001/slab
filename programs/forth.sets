@@ -7,36 +7,20 @@
 
 ;; ---- scratch cells ----
 ($section 32768)
-; i think most of these could be just replaced with a let call
-($alloc STRI   2)
-($alloc PRINTI 2)
-($alloc NAMEI  2)
-($alloc WALKER 2)
-($alloc FOUND  2)
-($alloc ITER   2)
-($alloc CHAR   2)
-($alloc DISP_I   2)  ; dispatch_immediate: pair index
-($alloc DISP_HIT 2)  ; dispatch_immediate: matched flag
+($alloc NOOP 2)
 
 ;; ---- ASCII character constants ----
 ($include "ascii.sets")
-(const EOF int -1)   ; key/read_line sentinel, not a character
+(const EOF int -1)
 
 ;; ---- dictionary entry layout: link(2) name-ptr(2) xt(2) name-bytes... ----
 (const DICT_NAME_OFF int 2)
 (const DICT_XT_OFF   int 4)
 (const DICT_HDR_SIZE int 6)
 
-;; ---- print_num scratch ----
-($alloc PN_VAL 2)
-($alloc PN_IDX 2)
-($alloc PN_BUF 12)   ; digit buffer
-
-;; ---- parse_num scratch ----
-($alloc PN_POS  2)
-($alloc PN_SIGN 2)
-($alloc PN_ACC  2)
-($alloc PN_OK   2)
+;; ---- print_num / parse_num shared state ----
+($alloc PN_BUF 12)
+($alloc PN_ACC  2)   ; parse_num's result, TODO: returning multiple values could be useful in cases like these?
 
 ;; ---- dictionary / interpreter state ----
 ($alloc LATEST 2)
@@ -72,38 +56,31 @@
 ;; ============================================================
 
 (def streq ((a : (ptr byte)) (b : (ptr byte))) : bool [semidet]
-  (! STRI 0) ; i could use let here?
-  (while (and (= (byte-ref a STRI) (byte-ref b STRI))
-              (!= (byte-ref a STRI) 0))
-    (! STRI (+ (@ STRI) 1)))
-  (= (byte-ref a STRI) (byte-ref b STRI)))
+  (local ((i 0))
+    (while (and (= (byte-ref a i) (byte-ref b i))
+                (!= (byte-ref a i) 0))
+      (! i (+ (@ i) 1)))
+    (= (byte-ref a i) (byte-ref b i))))
 
 (def print_str ((s : (ptr byte))) : void [nondet]
-  (! PRINTI 0)
-  (while (!= (byte-ref s PRINTI) 0)
-    (emit (byte-ref s PRINTI))
-    (! PRINTI (+ (@ PRINTI) 1))))
+  (local ((i 0))
+    (while (!= (byte-ref s i) 0)
+      (emit (byte-ref s i))
+      (! i (+ (@ i) 1)))))
 
 ;; print a signed integer in decimal
-;; uses: PN_VAL, PN_IDX, PN_BUF; calls divmod (which uses REM-QUOT)
 (def print_num ((n : int)) : void [nondet]
   (if (= n 0)
     (emit ASCII_0)
-    (do
-      ;; negative
-      (if (< n 0)
-        (do (emit MINUS_CHAR) (! PN_VAL (- 0 n)))
-        (! PN_VAL n))
-      ;; extract digits, remainder in REM
-      (! PN_IDX 0)
-      (while (< 0 (@ PN_VAL))
-        (byte-set! PN_BUF PN_IDX (+ ASCII_0 (mod (@ PN_VAL) 10)))
-        (! PN_VAL (/ (@ PN_VAL) 10))
-        (! PN_IDX (+ (@ PN_IDX) 1)))
+    (local ((val (if (< n 0) (do (emit MINUS_CHAR) (- 0 n)) n)) (idx 0))
+      (while (< 0 (@ val))
+        (byte-set! PN_BUF idx (+ ASCII_0 (mod (@ val) 10)))
+        (! val (/ (@ val) 10))
+        (! idx (+ (@ idx) 1)))
       ;; emit reversed
-      (while (< 0 (@ PN_IDX))
-        (! PN_IDX (- (@ PN_IDX) 1))
-        (emit (byte-ref PN_BUF PN_IDX))))))
+      (while (< 0 (@ idx))
+        (! idx (- (@ idx) 1))
+        (emit (byte-ref PN_BUF idx))))))
 
 ;; ============================================================
 ;; dictionary
@@ -116,41 +93,39 @@
 (def dict_check () : void [nondet]
   (if (< HEAP_LIMIT (@ HERE))
     (do (print_str "assert: heap overflow") (emit NEWLINE) (assert-fail))
-    (! ITER 0)))
+    (! NOOP 0)))
 
 (def dict_add ((name : (ptr byte)) (xt : int)) : void [nondet]
   (dict_check)
   (let ((h (@ HERE)))
+    (local ((namei 0))
+      (while (!= (byte-ref name namei) 0)
+        (byte-set! (+ h DICT_HDR_SIZE) namei (byte-ref name namei))
+        (! namei (+ (@ namei) 1)))
+      (byte-set! (+ h DICT_HDR_SIZE) namei 0)
 
-    (! NAMEI 0)
-    (while (!= (byte-ref name NAMEI) 0)
-      (byte-set! (+ h DICT_HDR_SIZE) NAMEI (byte-ref name NAMEI))
-      (! NAMEI (+ (@ NAMEI) 1)))
-    (byte-set! (+ h DICT_HDR_SIZE) NAMEI 0)
+      (! h (@ LATEST))                          ; link
+      (! (+ h DICT_NAME_OFF) (+ h DICT_HDR_SIZE))  ; name ptr -> copied string
+      (! (+ h DICT_XT_OFF) xt)                  ; xt
+      (! LATEST h)
 
-    (! h (@ LATEST))                          ; link
-    (! (+ h DICT_NAME_OFF) (+ h DICT_HDR_SIZE))  ; name ptr -> copied string
-    (! (+ h DICT_XT_OFF) xt)                  ; xt
-    (! LATEST h)
-
-    (! HERE (+ (+ h DICT_HDR_SIZE) (+ (@ NAMEI) 1)))))
+      (! HERE (+ (+ h DICT_HDR_SIZE) (+ (@ namei) 1))))))
 
 (def dict_find ((name : (ptr byte))) : int [semidet]
-  (! WALKER (@ LATEST))
-  (! FOUND 0)
-  (while (and (!= (@ WALKER) 0) (= (@ FOUND) 0))
-    (if (streq name (@ (+ (@ WALKER) DICT_NAME_OFF)))
-      (! FOUND (@ (+ (@ WALKER) DICT_XT_OFF)))
-      (! WALKER (@ (@ WALKER)))))
-  (@ FOUND))
+  (local ((walker (@ LATEST)) (found 0))
+    (while (and (!= (@ walker) 0) (= (@ found) 0))
+      (if (streq name (@ (+ (@ walker) DICT_NAME_OFF)))
+        (! found (@ (+ (@ walker) DICT_XT_OFF)))
+        (! walker (@ (@ walker)))))
+    (@ found)))
 
 (def dict_words () : void [nondet]
-  (! ITER (@ LATEST))
-  (while (!= (@ ITER) 0)
-    (print_str (@ (+ (@ ITER) DICT_NAME_OFF)))
-    (emit SPACE)
-    (! ITER (@ (@ ITER))))
-  (emit NEWLINE))
+  (local ((iter (@ LATEST)))
+    (while (!= (@ iter) 0)
+      (print_str (@ (+ (@ iter) DICT_NAME_OFF)))
+      (emit SPACE)
+      (! iter (@ (@ iter))))
+    (emit NEWLINE)))
 
 ;; ============================================================
 ;; Forth data stack
@@ -176,11 +151,11 @@
   (print_num (ds_depth))
   (emit 62)
   (emit SPACE)
-  (! ITER DSB)
-  (while (< (@ ITER) (@ DSP))
-    (print_num (@ (@ ITER)))
-    (emit SPACE)
-    (! ITER (+ (@ ITER) 2))))
+  (local ((iter DSB))
+    (while (< (@ iter) (@ DSP))
+      (print_num (@ (@ iter)))
+      (emit SPACE)
+      (! iter (+ (@ iter) 2)))))
 
 ;; ============================================================
 ;; input
@@ -188,15 +163,15 @@
 
 ;; read a line into LBUF, null-terminate, return length (-1 on EOF)
 (def read_line () : int [nondet]
-  (! ITER 0)
-  (while (do (! CHAR (key))
-             (and (!= (@ CHAR) EOF) (!= (@ CHAR) NEWLINE)))
-    (byte-set! LBUF ITER (@ CHAR))
-    (! ITER (+ (@ ITER) 1)))
-  (byte-set! LBUF ITER 0)
-  (if (and (= (@ CHAR) EOF) (= (@ ITER) 0))
-    EOF
-    (@ ITER)))
+  (local ((iter 0) (char 0))
+    (while (do (! char (key))
+               (and (!= (@ char) EOF) (!= (@ char) NEWLINE)))
+      (byte-set! LBUF iter (@ char))
+      (! iter (+ (@ iter) 1)))
+    (byte-set! LBUF iter 0)
+    (if (and (= (@ char) EOF) (= (@ iter) 0))
+      EOF
+      (@ iter))))
 
 ;; ============================================================
 ;; tokenizer — walk LBUF extracting space-delimited words
@@ -214,16 +189,14 @@
 
   (if (= (byte-ref LBUF LPOS) 0)
     0
-    (do
-
-      (! ITER 0)
+    (local ((iter 0))
       (while (and (!= (byte-ref LBUF LPOS) 0)
                   (!= (byte-ref LBUF LPOS) SPACE))
-        (byte-set! WBUF ITER (byte-ref LBUF LPOS))
-        (! ITER (+ (@ ITER) 1))
+        (byte-set! WBUF iter (byte-ref LBUF LPOS))
+        (! iter (+ (@ iter) 1))
         (! LPOS (+ (@ LPOS) 1)))
-      (byte-set! WBUF ITER 0)
-      (@ ITER))))
+      (byte-set! WBUF iter 0)
+      (@ iter))))
 
 ;; ============================================================
 ;; number parsing
@@ -231,32 +204,29 @@
 
 ;; try to parse WBUF as a signed decimal integer
 ;; returns true if success (result in PN_ACC), false if not a number
-;; uses: PN_POS, PN_SIGN, PN_ACC, PN_OK; calls mul
 (def parse_num () : bool [semidet]
-  (! PN_POS 0)
-  (! PN_SIGN 1)
-  (! PN_ACC 0)
-  ;; optional leading minus (PN_POS is still 0 here)
-  (if (= (byte-ref WBUF PN_POS) MINUS_CHAR)
-    (do (! PN_SIGN -1) (! PN_POS 1))
-    (! PN_ACC 0))
+  (local ((pos 0) (sign 1) (ok 1))
+    (! PN_ACC 0)
+    ;; optional leading minus (pos is still 0 here)
+    (if (= (byte-ref WBUF pos) MINUS_CHAR)
+      (do (! sign -1) (! pos 1))
+      (! PN_ACC 0))
 
-  (if (= (byte-ref WBUF PN_POS) 0)
-    false
-    (do
-      (! PN_OK 1)
-      (while (and (!= (byte-ref WBUF PN_POS) 0)
-                  (= (@ PN_OK) 1))
-        (let ((c (byte-ref WBUF PN_POS)))
-          (if (and (<= ASCII_0 c) (<= c ASCII_9))
-            (do
-              (! PN_ACC (+ (* (@ PN_ACC) 10) (- c ASCII_0)))
-              (! PN_POS (+ (@ PN_POS) 1)))
-            (! PN_OK 0))))
-      (if (= (@ PN_OK) 1)
-        (do (! PN_ACC (* (@ PN_ACC) (@ PN_SIGN)))
-            true)
-        false))))
+    (if (= (byte-ref WBUF pos) 0)
+      false
+      (do
+        (while (and (!= (byte-ref WBUF pos) 0)
+                    (= (@ ok) 1))
+          (let ((c (byte-ref WBUF pos)))
+            (if (and (<= ASCII_0 c) (<= c ASCII_9))
+              (do
+                (! PN_ACC (+ (* (@ PN_ACC) 10) (- c ASCII_0)))
+                (! pos (+ (@ pos) 1)))
+              (! ok 0))))
+        (if (= (@ ok) 1)
+          (do (! PN_ACC (* (@ PN_ACC) (@ sign)))
+              true)
+          false)))))
 
 ;; ============================================================
 ;; Forth primitives — each is a plain function
@@ -269,11 +239,11 @@
 
 ;; copy WBUF to CNAME
 (def save_name () : void [semidet]
-  (! STRI 0)
-  (while (!= (byte-ref WBUF STRI) 0)
-    (byte-set! CNAME STRI (byte-ref WBUF STRI))
-    (! STRI (+ (@ STRI) 1)))
-  (byte-set! CNAME STRI 0))
+  (local ((i 0))
+    (while (!= (byte-ref WBUF i) 0)
+      (byte-set! CNAME i (byte-ref WBUF i))
+      (! i (+ (@ i) 1)))
+    (byte-set! CNAME i 0)))
 
 ;; : — start a colon definition
 (def f_colon () : void [semidet]
@@ -313,7 +283,7 @@
   (let ((b (ds_pop))) (let ((a (ds_pop))) (ds_push b) (ds_push a))))
 
 (def f_drop () : void [semidet]
-  (ds_pop) (! ITER 0))
+  (ds_pop) (! NOOP 0))
 
 (def f_over () : void [semidet]
   (let ((b (ds_pop))) (let ((a (ds_pop))) (ds_push a) (ds_push b) (ds_push a))))
@@ -377,7 +347,7 @@
       (ds_push a) (ds_push b) (ds_push a) (ds_push b))))
 
 (def f_2drop () : void [semidet]
-  (ds_pop) (ds_pop) (! ITER 0))
+  (ds_pop) (ds_pop) (! NOOP 0))
 
 (def f_variable () : void [nondet]
   (tok_next)
@@ -465,15 +435,14 @@
 ;; ============================================================
 
 (def dispatch_immediate ((word : (ptr byte)) (rest : int ...)) : bool [nondet]
-  (! DISP_I 0)
-  (! DISP_HIT 0)
-  (while (and (< (@ DISP_I) rest-count) (= (@ DISP_HIT) 0))
-    (if (streq word (@ (+ rest (* (@ DISP_I) 2))))
-      (do (execute (@ (+ rest (* (+ (@ DISP_I) 1) 2))))
-          (! DISP_HIT 1))
-      (! DISP_HIT 0))
-    (! DISP_I (+ (@ DISP_I) 2)))
-  (!= (@ DISP_HIT) 0))
+  (local ((i 0) (hit 0))
+    (while (and (< (@ i) rest-count) (= (@ hit) 0))
+      (if (streq word (@ (+ rest (* (@ i) 2))))
+        (do (execute (@ (+ rest (* (+ (@ i) 1) 2))))
+            (! hit 1))
+        (! hit 0))
+      (! i (+ (@ i) 2)))
+    (!= (@ hit) 0)))
 
 ;; ============================================================
 ;; interpret one word (in WBUF)
@@ -500,7 +469,7 @@
           "repeat"  (addr f_repeat)
           "again"   (addr f_again)
           "recurse" (addr f_recurse))
-      (! ITER 0)
+      (! NOOP 0)
       (let ((xt (dict_find WBUF)))
         (if (!= xt 0)
           (do (emit_cell ($op call)) (emit_cell xt))
@@ -579,4 +548,4 @@
               (do (print_str "error: ")
                   (print_num (@ THROWN))
                   (emit NEWLINE))))
-          (! ITER 0))))))
+          (! NOOP 0))))))

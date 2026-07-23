@@ -11,6 +11,7 @@
 :- use_module(deadcode).
 :- use_module(constfold).
 :- use_module(inline).
+:- use_module(locals).
 
 :- use_module(library(lists)).
 :- use_module(library(format)).
@@ -82,7 +83,9 @@ compile_from_forms(Forms, Target, DefLines, SlotBase, Result) :-
     ast:transform_program(Forms, AstResult),
     ( AstResult \= ok(_) ->
         Result = error(ast, AstResult)
-    ; AstResult = ok(Defs),
+    ; AstResult = ok(RawDefs),
+      %% Stage 1.7: expand `local` into real per-function memory cells
+      locals:expand_locals(RawDefs, SlotBase, Defs, SlotBase1),
       ( Target = ast ->
           Result = ok(Defs)
       ;
@@ -117,7 +120,7 @@ compile_from_forms(Forms, Target, DefLines, SlotBase, Result) :-
                 inline:inline_calls(TypedDefs, InlinedDefs),
                 %% Stage 3.7: constant folding for det functions
                 constfold:fold_constants(InlinedDefs, EffectEnv, FoldedDefs),
-                codegen:compile_program(FoldedDefs, SlotBase, CgResult),
+                codegen:compile_program(FoldedDefs, SlotBase1, CgResult),
                 ( CgResult \= ok(_) ->
                     Result = error(codegen, CgResult)
                 ; CgResult = ok(Tokens),
