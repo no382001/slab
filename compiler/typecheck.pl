@@ -139,6 +139,12 @@ infer(Env, FEnv, binop(Op, A, B), int) :-
     numeric_type(AT),
     numeric_type(BT).
 
+%% and/or/xor on two bools is logical, not bitwise -> bool
+infer(Env, FEnv, binop(Op, A, B), bool) :-
+    member(Op, [and, or, xor]),
+    infer(Env, FEnv, A, bool),
+    infer(Env, FEnv, B, bool).
+
 %% comparison -> bool
 infer(Env, FEnv, binop(Op, A, B), bool) :-
     member(Op, [=, <, >, '!=', <=, >=]),
@@ -329,11 +335,21 @@ pipeline(Src, Result) :-
 ?- pipeline("(def abs ((n : int)) : int (if (< n 0) (- 0 n) n))", ok(_)).
    true.
 
+%% and/or/xor on two bools is logical (bool), not bitwise (int)
+?- pipeline("(def f ((a : bool) (b : bool)) : bool (and a b))", ok(_)).
+   true.
+
+?- pipeline("(def f ((a : int) (b : int)) : int (and a b))", ok(_)).
+   true.
+
 %% type errors
 ?- pipeline("(def bad ((n : int)) : bool n)", error(_)).
    true.
 
 ?- pipeline("(def bad ((n : int)) : int (if (< n 0) 1 (< n 5)))", error(_)).
+   true.
+
+?- pipeline("(def bad ((a : bool) (b : int)) : bool (and a b))", error(_)).
    true.
 
 ?- pipeline("(def bad () : int x)", error(_)).

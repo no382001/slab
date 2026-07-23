@@ -72,9 +72,8 @@
 
 (def streq ((a : (ptr byte)) (b : (ptr byte))) : bool [semidet]
   (! STRI 0)
-  (while (if (= (c@ (+ a (@ STRI))) (c@ (+ b (@ STRI))))
-           (!= (c@ (+ a (@ STRI))) 0)
-           false)
+  (while (and (= (c@ (+ a (@ STRI))) (c@ (+ b (@ STRI))))
+              (!= (c@ (+ a (@ STRI))) 0))
     (! STRI (+ (@ STRI) 1)))
   (= (c@ (+ a (@ STRI))) (c@ (+ b (@ STRI)))))
 
@@ -138,7 +137,7 @@
 (def dict_find ((name : (ptr byte))) : int [semidet]
   (! WALKER (@ LATEST))
   (! FOUND 0)
-  (while (if (!= (@ WALKER) 0) (= (@ FOUND) 0) false)
+  (while (and (!= (@ WALKER) 0) (= (@ FOUND) 0))
     (if (streq name (@ (+ (@ WALKER) DICT_NAME_OFF)))
       (! FOUND (@ (+ (@ WALKER) DICT_XT_OFF)))
       (! WALKER (@ (@ WALKER)))))
@@ -190,12 +189,11 @@
 (def read_line () : int [nondet]
   (! ITER 0)
   (while (do (! CHAR (key))
-             (if (= (@ CHAR) EOF) false
-               (!= (@ CHAR) NEWLINE)))
+             (and (!= (@ CHAR) EOF) (!= (@ CHAR) NEWLINE)))
     (c! (+ LBUF (@ ITER)) (@ CHAR))
     (! ITER (+ (@ ITER) 1)))
   (c! (+ LBUF (@ ITER)) 0)
-  (if (if (= (@ CHAR) EOF) (= (@ ITER) 0) false)
+  (if (and (= (@ CHAR) EOF) (= (@ ITER) 0))
     EOF
     (@ ITER)))
 
@@ -218,9 +216,8 @@
     (do
 
       (! ITER 0)
-      (while (if (!= (c@ (+ LBUF (@ LPOS))) 0)
-               (!= (c@ (+ LBUF (@ LPOS))) SPACE)
-               false)
+      (while (and (!= (c@ (+ LBUF (@ LPOS))) 0)
+                  (!= (c@ (+ LBUF (@ LPOS))) SPACE))
         (c! (+ WBUF (@ ITER)) (c@ (+ LBUF (@ LPOS))))
         (! ITER (+ (@ ITER) 1))
         (! LPOS (+ (@ LPOS) 1)))
@@ -247,10 +244,10 @@
     false
     (do
       (! PN_OK 1)
-      (while (if (!= (c@ (+ WBUF (@ PN_POS))) 0)
-               (= (@ PN_OK) 1) false)
+      (while (and (!= (c@ (+ WBUF (@ PN_POS))) 0)
+                  (= (@ PN_OK) 1))
         (let ((c (c@ (+ WBUF (@ PN_POS)))))
-          (if (if (<= ASCII_0 c) (<= c ASCII_9) false)
+          (if (and (<= ASCII_0 c) (<= c ASCII_9))
             (do
               (! PN_ACC (+ (* (@ PN_ACC) 10) (- c ASCII_0)))
               (! PN_POS (+ (@ PN_POS) 1)))
@@ -469,7 +466,7 @@
 (def dispatch_immediate ((word : (ptr byte)) (rest : int ...)) : bool [nondet]
   (! DISP_I 0)
   (! DISP_HIT 0)
-  (while (if (< (@ DISP_I) rest-count) (= (@ DISP_HIT) 0) false)
+  (while (and (< (@ DISP_I) rest-count) (= (@ DISP_HIT) 0))
     (if (streq word (@ (+ rest (* (@ DISP_I) 2))))
       (do (execute (@ (+ rest (* (+ (@ DISP_I) 1) 2))))
           (! DISP_HIT 1))
