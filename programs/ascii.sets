@@ -1,0 +1,6 @@
+;; ---- ASCII character constants ----
+(const NEWLINE    int 10)
+(const SPACE      int 32)
+(const MINUS_CHAR int 45)
+(const ASCII_0    int 48)
+(const ASCII_9    int 57)

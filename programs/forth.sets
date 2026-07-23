@@ -14,6 +14,17 @@
 ($alloc FOUND  2)
 ($alloc ITER   2)
 ($alloc CHAR   2)
+($alloc DISP_I   2)  ; dispatch_immediate: pair index
+($alloc DISP_HIT 2)  ; dispatch_immediate: matched flag
+
+;; ---- ASCII character constants ----
+($include "ascii.sets")
+(const EOF int -1)   ; key/read_line sentinel, not a character
+
+;; ---- dictionary entry layout: link(2) name-ptr(2) xt(2) name-bytes... ----
+(const DICT_NAME_OFF int 2)
+(const DICT_XT_OFF   int 4)
+(const DICT_HDR_SIZE int 6)
 
 ;; ---- print_num scratch ----
 ($alloc PN_VAL 2)
@@ -63,7 +74,7 @@
   (! STRI 0)
   (while (if (= (c@ (+ a (@ STRI))) (c@ (+ b (@ STRI))))
            (!= (c@ (+ a (@ STRI))) 0)
-           (< 1 0))
+           false)
     (! STRI (+ (@ STRI) 1)))
   (= (c@ (+ a (@ STRI))) (c@ (+ b (@ STRI)))))
 
@@ -77,16 +88,16 @@
 ;; uses: PN_VAL, PN_IDX, PN_BUF; calls divmod (which uses REM-QUOT)
 (def print_num ((n : int)) : void [nondet]
   (if (= n 0)
-    (emit 48)
+    (emit ASCII_0)
     (do
       ;; negative
       (if (< n 0)
-        (do (emit 45) (! PN_VAL (- 0 n)))
+        (do (emit MINUS_CHAR) (! PN_VAL (- 0 n)))
         (! PN_VAL n))
       ;; extract digits, remainder in REM
       (! PN_IDX 0)
       (while (< 0 (@ PN_VAL))
-        (c! (+ PN_BUF (@ PN_IDX)) (+ 48 (mod (@ PN_VAL) 10)))
+        (c! (+ PN_BUF (@ PN_IDX)) (+ ASCII_0 (mod (@ PN_VAL) 10)))
         (! PN_VAL (/ (@ PN_VAL) 10))
         (! PN_IDX (+ (@ PN_IDX) 1)))
       ;; emit reversed
@@ -104,42 +115,42 @@
 
 (def dict_check () : void [nondet]
   (if (< HEAP_LIMIT (@ HERE))
-    (do (print_str "assert: heap overflow") (emit 10) (assert-fail))
+    (do (print_str "assert: heap overflow") (emit NEWLINE) (assert-fail))
     (! ITER 0)))
 
 (def dict_add ((name : (ptr byte)) (xt : int)) : void [nondet]
   (dict_check)
   (let ((h (@ HERE)))
-    
+
     (! NAMEI 0)
     (while (!= (c@ (+ name (@ NAMEI))) 0)
-      (c! (+ (+ h 6) (@ NAMEI)) (c@ (+ name (@ NAMEI))))
+      (c! (+ (+ h DICT_HDR_SIZE) (@ NAMEI)) (c@ (+ name (@ NAMEI))))
       (! NAMEI (+ (@ NAMEI) 1)))
-    (c! (+ (+ h 6) (@ NAMEI)) 0)
-    
-    (! h (@ LATEST))            ; link
-    (! (+ h 2) (+ h 6))            ; name ptr -> copied string
-    (! (+ h 4) xt)                  ; xt
+    (c! (+ (+ h DICT_HDR_SIZE) (@ NAMEI)) 0)
+
+    (! h (@ LATEST))                          ; link
+    (! (+ h DICT_NAME_OFF) (+ h DICT_HDR_SIZE))  ; name ptr -> copied string
+    (! (+ h DICT_XT_OFF) xt)                  ; xt
     (! LATEST h)
-    
-    (! HERE (+ (+ h 7) (@ NAMEI)))))
+
+    (! HERE (+ (+ h DICT_HDR_SIZE) (+ (@ NAMEI) 1)))))
 
 (def dict_find ((name : (ptr byte))) : int [semidet]
   (! WALKER (@ LATEST))
   (! FOUND 0)
-  (while (if (!= (@ WALKER) 0) (= (@ FOUND) 0) (< 1 0))
-    (if (streq name (@ (+ (@ WALKER) 2)))
-      (! FOUND (@ (+ (@ WALKER) 4)))
+  (while (if (!= (@ WALKER) 0) (= (@ FOUND) 0) false)
+    (if (streq name (@ (+ (@ WALKER) DICT_NAME_OFF)))
+      (! FOUND (@ (+ (@ WALKER) DICT_XT_OFF)))
       (! WALKER (@ (@ WALKER)))))
   (@ FOUND))
 
 (def dict_words () : void [nondet]
   (! ITER (@ LATEST))
   (while (!= (@ ITER) 0)
-    (print_str (@ (+ (@ ITER) 2)))
-    (emit 32)
+    (print_str (@ (+ (@ ITER) DICT_NAME_OFF)))
+    (emit SPACE)
     (! ITER (@ (@ ITER))))
-  (emit 10))
+  (emit NEWLINE))
 
 ;; ============================================================
 ;; Forth data stack
@@ -164,11 +175,11 @@
   (emit 60)
   (print_num (ds_depth))
   (emit 62)
-  (emit 32)
+  (emit SPACE)
   (! ITER DSB)
   (while (< (@ ITER) (@ DSP))
     (print_num (@ (@ ITER)))
-    (emit 32)
+    (emit SPACE)
     (! ITER (+ (@ ITER) 2))))
 
 ;; ============================================================
@@ -179,13 +190,13 @@
 (def read_line () : int [nondet]
   (! ITER 0)
   (while (do (! CHAR (key))
-             (if (= (@ CHAR) -1) (< 1 0)
-               (!= (@ CHAR) 10)))
+             (if (= (@ CHAR) EOF) false
+               (!= (@ CHAR) NEWLINE)))
     (c! (+ LBUF (@ ITER)) (@ CHAR))
     (! ITER (+ (@ ITER) 1)))
   (c! (+ LBUF (@ ITER)) 0)
-  (if (if (= (@ CHAR) -1) (= (@ ITER) 0) (< 1 0))
-    -1
+  (if (if (= (@ CHAR) EOF) (= (@ ITER) 0) false)
+    EOF
     (@ ITER)))
 
 ;; ============================================================
@@ -199,17 +210,17 @@
 ;; returns word length (0 = end of line)
 (def tok_next () : int [semidet]
   ;; skip spaces
-  (while (= (c@ (+ LBUF (@ LPOS))) 32)
+  (while (= (c@ (+ LBUF (@ LPOS))) SPACE)
     (! LPOS (+ (@ LPOS) 1)))
-  
+
   (if (= (c@ (+ LBUF (@ LPOS))) 0)
     0
     (do
-      
+
       (! ITER 0)
       (while (if (!= (c@ (+ LBUF (@ LPOS))) 0)
-               (!= (c@ (+ LBUF (@ LPOS))) 32)
-               (< 1 0))
+               (!= (c@ (+ LBUF (@ LPOS))) SPACE)
+               false)
         (c! (+ WBUF (@ ITER)) (c@ (+ LBUF (@ LPOS))))
         (! ITER (+ (@ ITER) 1))
         (! LPOS (+ (@ LPOS) 1)))
@@ -228,26 +239,26 @@
   (! PN_SIGN 1)
   (! PN_ACC 0)
   ;; optional leading minus
-  (if (= (c@ WBUF) 45)
+  (if (= (c@ WBUF) MINUS_CHAR)
     (do (! PN_SIGN -1) (! PN_POS 1))
     (! PN_ACC 0))
-  
+
   (if (= (c@ (+ WBUF (@ PN_POS))) 0)
-    (< 1 0)
+    false
     (do
       (! PN_OK 1)
       (while (if (!= (c@ (+ WBUF (@ PN_POS))) 0)
-               (= (@ PN_OK) 1) (< 1 0))
+               (= (@ PN_OK) 1) false)
         (let ((c (c@ (+ WBUF (@ PN_POS)))))
-          (if (if (< 47 c) (< c 58) (< 1 0))
+          (if (if (<= ASCII_0 c) (<= c ASCII_9) false)
             (do
-              (! PN_ACC (+ (* (@ PN_ACC) 10) (- c 48)))
+              (! PN_ACC (+ (* (@ PN_ACC) 10) (- c ASCII_0)))
               (! PN_POS (+ (@ PN_POS) 1)))
             (! PN_OK 0))))
       (if (= (@ PN_OK) 1)
         (do (! PN_ACC (* (@ PN_ACC) (@ PN_SIGN)))
-            (< 0 1))
-        (< 1 0)))))
+            true)
+        false))))
 
 ;; ============================================================
 ;; Forth primitives — each is a plain function
@@ -280,7 +291,7 @@
   (! STATE 0))  ; back to interpret mode
 
 (def f_dot () : void [nondet]
-  (print_num (ds_pop)) (emit 32))
+  (print_num (ds_pop)) (emit SPACE))
 
 (def f_add () : void [semidet]
   (let ((b (ds_pop))) (ds_push (+ (ds_pop) b))))
@@ -334,7 +345,7 @@
   (ds_show))
 
 (def f_cr () : void [nondet]
-  (emit 10))
+  (emit NEWLINE))
 
 (def f_emit () : void [nondet]
   (emit (ds_pop)))
@@ -450,6 +461,23 @@
   (emit_cell (@ CSTART)))
 
 ;; ============================================================
+;; case-like dispatch: matches `word` against a flat run of
+;; (name-string, handler-addr) pairs, calls the first handler whose
+;; name matches, returns true. Returns false if none match.
+;; ============================================================
+
+(def dispatch_immediate ((word : (ptr byte)) (rest : int ...)) : bool [nondet]
+  (! DISP_I 0)
+  (! DISP_HIT 0)
+  (while (if (< (@ DISP_I) rest-count) (= (@ DISP_HIT) 0) false)
+    (if (streq word (@ (+ rest (* (@ DISP_I) 2))))
+      (do (execute (@ (+ rest (* (+ (@ DISP_I) 1) 2))))
+          (! DISP_HIT 1))
+      (! DISP_HIT 0))
+    (! DISP_I (+ (@ DISP_I) 2)))
+  (!= (@ DISP_HIT) 0))
+
+;; ============================================================
 ;; interpret one word (in WBUF)
 ;; ============================================================
 
@@ -461,25 +489,27 @@
         (execute xt)
         (if (parse_num)
           (ds_push (@ PN_ACC))
-          (do (print_str WBUF) (print_str " ?") (emit 10)))))
+          (do (print_str WBUF) (print_str " ?") (emit NEWLINE)))))
     ;; --- compile mode ---
-    (if (streq WBUF ";")       (f_semi)
-    (if (streq WBUF "if")      (f_if)
-    (if (streq WBUF "then")    (f_then)
-    (if (streq WBUF "else")    (f_else)
-    (if (streq WBUF "begin")   (f_begin)
-    (if (streq WBUF "until")   (f_until)
-    (if (streq WBUF "while")   (f_while)
-    (if (streq WBUF "repeat")  (f_repeat)
-    (if (streq WBUF "again")   (f_again)
-    (if (streq WBUF "recurse") (f_recurse)
+    (if (dispatch_immediate WBUF
+          ";"       (addr f_semi)
+          "if"      (addr f_if)
+          "then"    (addr f_then)
+          "else"    (addr f_else)
+          "begin"   (addr f_begin)
+          "until"   (addr f_until)
+          "while"   (addr f_while)
+          "repeat"  (addr f_repeat)
+          "again"   (addr f_again)
+          "recurse" (addr f_recurse))
+      (! ITER 0)
       (let ((xt (dict_find WBUF)))
         (if (!= xt 0)
           (do (emit_cell ($op call)) (emit_cell xt))
           (if (parse_num)
             (do (emit_cell ($op lit)) (emit_cell (@ PN_ACC))
                 (emit_cell ($op call)) (emit_cell (addr ds_push)))
-            (do (print_str WBUF) (print_str " ?") (emit 10)))))))))))))))))
+            (do (print_str WBUF) (print_str " ?") (emit NEWLINE))))))))
 
 ;; run all tokens on a line, wrapped in catch
 ;; catch_push saves RP here; if throw fires, we return from run_line early
@@ -537,19 +567,18 @@
 
   
   (print_str "sets forth")
-  (emit 10)
+  (emit NEWLINE)
 
-  
   (while true
     (let ((len (read_line)))
-      (if (= len -1) (do (print_str "got eof, exiting...") (emit 10) (bye))
+      (if (= len EOF) (do (print_str "got eof, exiting...") (emit NEWLINE) (bye))
         (if (< 0 len)
           (do
             (! THROWN 0)
             (run_line)
             (if (= (@ THROWN) 0)
-              (do (print_str " ok") (emit 10))
+              (do (print_str " ok") (emit NEWLINE))
               (do (print_str "error: ")
                   (print_num (@ THROWN))
-                  (emit 10))))
+                  (emit NEWLINE))))
           (! ITER 0))))))

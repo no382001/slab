@@ -295,6 +295,16 @@ setup() {
   [[ "$output" == *"10 "* ]]
 }
 
+@test "e2e: forth if/then control flow" {
+  run run_program_file "$BATS_TEST_DIRNAME/../programs/forth.sets" $': myabs dup 0 < if negate then ;\n-7 myabs .\nbye\n'
+  [[ "$output" == *"7 "* ]]
+}
+
+@test "e2e: forth begin/until control flow" {
+  run run_program_file "$BATS_TEST_DIRNAME/../programs/forth.sets" $': cnt3 begin dup . 1 - dup 0 = until drop ;\n3 cnt3\nbye\n'
+  [[ "$output" == *"3 2 1 "* ]]
+}
+
 @test "e2e: meta alloc and vm-sp" {
   prog='($section 1000)
 ($alloc X 2)
