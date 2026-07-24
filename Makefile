@@ -6,8 +6,15 @@ CXXFLAGS := \
     -Wpedantic \
     -g
 
+BUILD_DIR := _build
+
+ifeq ($(RELEASE),1)
+CXXFLAGS += -O2 -DNDEBUG
+BUILD_DIR := _build_release
+else
 CXXFLAGS += -fsanitize=address -fno-omit-frame-pointer
 LDFLAGS += -fsanitize=address
+endif
 
 SDL2_CFLAGS := $(shell pkg-config --cflags sdl2)
 SDL2_LIBS   := $(shell pkg-config --libs sdl2)
@@ -15,7 +22,6 @@ SDL2_LIBS   := $(shell pkg-config --libs sdl2)
 TARGET := vm
 CHIP8  := chip8
 CODEGEN := codegen
-BUILD_DIR := _build
 GEN_DIR := gen
 
 # Core VM: no display, no codegen
@@ -32,6 +38,10 @@ CHIP8_OBJS := $(BUILD_DIR)/chip8_main.o $(BUILD_DIR)/chip8_ext.o \
               $(BUILD_DIR)/vm.o
 
 all: $(TARGET) $(CHIP8) $(GEN_DIR)/gen.pl
+
+.PHONY: release
+release:
+	@$(MAKE) RELEASE=1 all
 
 $(TARGET): $(OBJS)
 	$(CXX) $(LDFLAGS) $(OBJS) -o $@
@@ -68,7 +78,7 @@ $(GEN_DIR):
 
 .PHONY: clean
 clean:
-	rm -rf $(BUILD_DIR) $(GEN_DIR) $(TARGET) $(CHIP8) $(CODEGEN)
+	rm -rf _build _build_release $(GEN_DIR) $(TARGET) $(CHIP8) $(CODEGEN)
 
 .PHONY: format
 format:

@@ -1,4 +1,5 @@
 _build/
+_build_release/
 gen/
 programs/*.bin
 examples/chip8/*.bin
