@@ -1,6 +1,7 @@
 :- module(inline, [inline_calls/2, inline_warnings/2]).
 
 :- use_module(library(lists)).
+:- use_module(builder).
 
 inline_calls(Defs, InlinedDefs) :-
     build_inline_fns(Defs, InlineFns),
@@ -121,7 +122,7 @@ inline_expr(Fns, D, call(Name, Args), Result) :-
     rename_body(Body, Renames, RenamedBody),
     D1 is D - 1,
     maplist(inline_expr(Fns, D1), RenamedBody, InlinedBody),
-    Result = let(Bindings, InlinedBody).
+    mk_let(Bindings, InlinedBody, Result).
 
 %% ordinary call: just recurse into the arguments
 inline_expr(Fns, D, call(Name, Args), call(Name, IArgs)) :-
@@ -149,7 +150,8 @@ fresh_names([param(Name, _) | Rest], [Name-Fresh | RestR]) :-
     fresh_names(Rest, RestR).
 
 bindings_for([], [], []).
-bindings_for([_-Fresh | RestR], [Arg | RestA], [bind(Fresh, Arg) | RestB]) :-
+bindings_for([_-Fresh | RestR], [Arg | RestA], [Bind | RestB]) :-
+    mk_bind(Fresh, Arg, Bind),
     bindings_for(RestR, RestA, RestB).
 
 %% ============================================================
