@@ -122,7 +122,7 @@ inline_expr(Fns, D, call(Name, Args), Result) :-
     rename_body(Body, Renames, RenamedBody),
     D1 is D - 1,
     maplist(inline_expr(Fns, D1), RenamedBody, InlinedBody),
-    mk_let(Bindings, InlinedBody, Result).
+    builder:mk_let(Bindings, InlinedBody, Result).
 
 %% ordinary call: just recurse into the arguments
 inline_expr(Fns, D, call(Name, Args), call(Name, IArgs)) :-
@@ -151,7 +151,7 @@ fresh_names([param(Name, _) | Rest], [Name-Fresh | RestR]) :-
 
 bindings_for([], [], []).
 bindings_for([_-Fresh | RestR], [Arg | RestA], [Bind | RestB]) :-
-    mk_bind(Fresh, Arg, Bind),
+    builder:mk_bind(Fresh, Arg, Bind),
     bindings_for(RestR, RestA, RestB).
 
 %% ============================================================
