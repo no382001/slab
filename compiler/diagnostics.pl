@@ -27,10 +27,6 @@ ansi(Color, Text, Colored) :-
     ansi_color_code(Color, Code),
     phrase((seq(Esc), seq(Code), "m", seq(Text), seq(Esc), "0m"), Colored).
 
-ansi_bold(Text, Colored) :- ansi(bold, Text, Colored).
-ansi_red(Text, Colored) :- ansi(red, Text, Colored).
-ansi_yellow(Text, Colored) :- ansi(yellow, Text, Colored). % TODO: this is ugly use ansi(Color,_,_) instead, everywhere
-
 %% ============================================================
 %% effect annotation warnings to stderr
 %% ============================================================
@@ -39,8 +35,8 @@ warn_effects([]).
 warn_effects([unannotated(Name, Inferred)|Rest]) :-
     atom_chars(Name, NameChars),
     atom_chars(Inferred, InfChars),
-    ansi_yellow("warning:", WarnTag),
-    ansi_bold(NameChars, BoldName),
+    ansi(yellow, "warning:", WarnTag),
+    ansi(bold, NameChars, BoldName),
     phrase((seq(WarnTag), " '", seq(BoldName),
             "' has no effect annotation, inferred [", seq(InfChars), "]\n"), Msg),
     write_stderr(Msg),
@@ -49,8 +45,8 @@ warn_effects([overpermissive(Name, Decl, Inferred)|Rest]) :-
     atom_chars(Name, NameChars),
     atom_chars(Decl, DeclChars),
     atom_chars(Inferred, InfChars),
-    ansi_yellow("warning:", WarnTag),
-    ansi_bold(NameChars, BoldName),
+    ansi(yellow, "warning:", WarnTag),
+    ansi(bold, NameChars, BoldName),
     phrase((seq(WarnTag), " '", seq(BoldName), "' declared [", seq(DeclChars),
             "] but inferred [", seq(InfChars), "] (annotation is too permissive)\n"), Msg),
     write_stderr(Msg),
@@ -61,8 +57,8 @@ warn_dead_code([]).
 warn_dead_code([Kind-Name|Rest]) :-
     atom_chars(Name, NameChars),
     kind_label(Kind, KindLabel),
-    ansi_yellow("warning:", WarnTag),
-    ansi_bold(NameChars, BoldName),
+    ansi(yellow, "warning:", WarnTag),
+    ansi(bold, NameChars, BoldName),
     phrase((seq(WarnTag), " unused ", seq(KindLabel), " '", seq(BoldName), "'\n"), Msg),
     write_stderr(Msg),
     warn_dead_code(Rest).
@@ -78,8 +74,8 @@ warn_inline([ineligible_self_recursive(Name)|Rest]) :-
 
 warn_inline_reason(Name, Reason) :-
     atom_chars(Name, NameChars),
-    ansi_yellow("warning:", WarnTag),
-    ansi_bold(NameChars, BoldName),
+    ansi(yellow, "warning:", WarnTag),
+    ansi(bold, NameChars, BoldName),
     phrase((seq(WarnTag), " '", seq(BoldName), "' declared [inline] but ",
             seq(Reason), ", ignoring hint\n"), Msg),
     write_stderr(Msg).
@@ -98,9 +94,9 @@ format_typecheck_errors([return_type_mismatch(Name, Expected)|Rest], DefLines) :
     atom_chars(Expected, ExpCs),
     ( member(Name-Loc, DefLines) -> true ; Loc = unknown ),
     format_loc(Loc, LocCs),
-    ansi_bold(LocCs, BoldLoc),
-    ansi_red("error:", ErrTag),
-    ansi_bold(NameCs, BoldName),
+    ansi(bold, LocCs, BoldLoc),
+    ansi(red, "error:", ErrTag),
+    ansi(bold, NameCs, BoldName),
     phrase((seq(BoldLoc), seq(ErrTag), " '", seq(BoldName),
             "' return type mismatch, expected ", seq(ExpCs), "\n"), Msg),
     write_stderr(Msg),
@@ -110,20 +106,20 @@ format_typecheck_errors([type_mismatch(const, Name, Type)|Rest], DefLines) :-
     atom_chars(Type, TypeCs),
     ( member(Name-Loc, DefLines) -> true ; Loc = unknown ),
     format_loc(Loc, LocCs),
-    ansi_bold(LocCs, BoldLoc),
-    ansi_red("error:", ErrTag),
-    ansi_bold(NameCs, BoldName),
+    ansi(bold, LocCs, BoldLoc),
+    ansi(red, "error:", ErrTag),
+    ansi(bold, NameCs, BoldName),
     phrase((seq(BoldLoc), seq(ErrTag), " const '", seq(BoldName),
             "' type mismatch, declared ", seq(TypeCs), "\n"), Msg),
     write_stderr(Msg),
     format_typecheck_errors(Rest, DefLines).
 format_typecheck_errors([while_cond_not_bool|Rest], DefLines) :-
-    ansi_red("error:", ErrTag),
+    ansi(red, "error:", ErrTag),
     phrase((seq(ErrTag), " while condition must be bool\n"), Msg),
     write_stderr(Msg),
     format_typecheck_errors(Rest, DefLines).
 format_typecheck_errors([type_error(Expr)|Rest], DefLines) :-
-    ansi_red("error:", ErrTag),
+    ansi(red, "error:", ErrTag),
     with_output_to(chars(ExprCs), write(Expr)),
     phrase((seq(ErrTag), " type error in expression: ", seq(ExprCs), "\n"), Msg),
     write_stderr(Msg),
@@ -138,9 +134,9 @@ format_effect_errors([effect_mismatch(Name, Decl, Inferred, Loc)|Rest]) :-
     atom_chars(Decl, DeclCs),
     atom_chars(Inferred, InfCs),
     format_loc(Loc, LocCs),
-    ansi_bold(LocCs, BoldLoc),
-    ansi_red("error:", ErrTag),
-    ansi_bold(NameCs, BoldName),
+    ansi(bold, LocCs, BoldLoc),
+    ansi(red, "error:", ErrTag),
+    ansi(bold, NameCs, BoldName),
     phrase((seq(BoldLoc), seq(ErrTag), " '", seq(BoldName), "' declared [",
             seq(DeclCs), "] but inferred ", seq(InfCs), "\n"), Msg),
     maplist(put_char, Msg),
@@ -163,14 +159,14 @@ format_loc(unknown, "").
 
 format_paren_error(error(unclosed(Ch), loc(L, C))) :-
     format_loc(loc(L, C), LocCs),
-    ansi_bold(LocCs, BoldLoc),
-    ansi_red("error:", ErrTag),
+    ansi(bold, LocCs, BoldLoc),
+    ansi(red, "error:", ErrTag),
     phrase((seq(BoldLoc), seq(ErrTag), " unclosed '", [Ch], "'\n"), Msg),
     write_stderr(Msg).
 format_paren_error(error(extra_close, loc(L, C))) :-
     format_loc(loc(L, C), LocCs),
-    ansi_bold(LocCs, BoldLoc),
-    ansi_red("error:", ErrTag),
+    ansi(bold, LocCs, BoldLoc),
+    ansi(red, "error:", ErrTag),
     phrase((seq(BoldLoc), seq(ErrTag), " unexpected ')'\n"), Msg),
     write_stderr(Msg).
 
