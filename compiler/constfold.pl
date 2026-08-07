@@ -1,13 +1,42 @@
-:- module(constfold, [fold_constants/3]).
+:- module(constfold, [fold_constants/3, fold_stats/1]).
 
 :- use_module(library(lists)).
 :- use_module(builder).
+
+%% ============================================================
+%% fold statistics
+%% ============================================================
+%% Counts of successful folds by kind, from the most recent
+%% fold_constants/3 call. Reset at the start of every call, so
+%% only meaningful to read right after folding.
+
+:- dynamic(fold_stat/2).
+fold_stat(binop, 0).
+fold_stat('if', 0).
+fold_stat(call, 0).
+
+reset_fold_stats :-
+    retractall(fold_stat(_, _)),
+    assertz(fold_stat(binop, 0)),
+    assertz(fold_stat('if', 0)),
+    assertz(fold_stat(call, 0)).
+
+bump_fold_stat(Kind) :-
+    retract(fold_stat(Kind, N)),
+    N1 is N + 1,
+    assertz(fold_stat(Kind, N1)).
+
+%% fold_stats(-Stats)
+%% Stats = [binop-N, if-N, call-N]
+fold_stats(Stats) :-
+    findall(Kind-N, fold_stat(Kind, N), Stats).
 
 %% ============================================================
 %% entry point
 %% ============================================================
 
 fold_constants(Defs, EffectEnv, FoldedDefs) :-
+    reset_fold_stats,
     build_det_fns(Defs, EffectEnv, DetFns),
     maplist(fold_def(DetFns), Defs, FoldedDefs).
 
@@ -48,7 +77,8 @@ fold_expr(DetFns, binop(Op, A, B), Result) :-
     fold_expr(DetFns, B, FB),
     ( FA = num(NA), FB = num(NB) ->
         eval_binop(Op, NA, NB, R),
-        builder:mk_num(R, Result)
+        builder:mk_num(R, Result),
+        bump_fold_stat(binop)
     ;
         Result = binop(Op, FA, FB)
     ).
@@ -58,7 +88,8 @@ fold_expr(DetFns, if(C, T, E), Result) :-
     fold_expr(DetFns, T, FT),
     fold_expr(DetFns, E, FE),
     ( FC = num(N) ->
-        ( N =\= 0 -> Result = FT ; Result = FE )
+        ( N =\= 0 -> Result = FT ; Result = FE ),
+        bump_fold_stat('if')
     ;
         Result = if(FC, FT, FE)
     ).
@@ -94,7 +125,8 @@ fold_expr(DetFns, call(Name, Args), Result) :-
       member(detfn(Name, Params, Body), DetFns) ->
         bind_params(Params, FArgs, Env),
         ( eval_body(DetFns, Env, Body, 1000, Val, _) ->
-            builder:mk_num(Val, Result)
+            builder:mk_num(Val, Result),
+            bump_fold_stat(call)
         ;
             Result = call(Name, FArgs)
         )
@@ -222,4 +254,22 @@ fold_pipeline(Src, FoldedDefs) :-
 %% division by zero must not fold (guard keeps call intact)
 ?- fold_pipeline("(def f ((x : int)) : int (/ x 0)) (def g () : int (f 10))", Defs),
    member(def(g, _, _, _, [call(f, [num(10)])]), Defs).
+   true.
+
+%% stats: folding f(7) counts as one call fold, no binop/if folds at the call site
+?- fold_pipeline("(def f ((x : int)) : int (* x 3)) (def g () : int (f 7))", _),
+   fold_stats(Stats),
+   member(binop-0, Stats), member('if'-0, Stats), member(call-1, Stats).
+   true.
+
+%% stats: (if (> 1 0) (+ 2 3) 0) folds two binops (> and +) and the if itself
+?- fold_pipeline("(def g () : int (if (> 1 0) (+ 2 3) 0))", _),
+   fold_stats(Stats),
+   member(binop-2, Stats), member('if'-1, Stats), member(call-0, Stats).
+   true.
+
+%% stats reset between calls: a no-op fold reports all zeros
+?- fold_pipeline("(def g () : int 5)", _),
+   fold_stats(Stats),
+   member(binop-0, Stats), member('if'-0, Stats), member(call-0, Stats).
    true.

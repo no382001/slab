@@ -12,9 +12,14 @@ errors / warnings:
 - [det] function laundering effects via addr+execute of a [nondet] function
 
 optimizations:
-- sub-expression constfold: fold det calls with constant args anywhere they appear, not just inside det functions — the containing function's effect is irrelevant
 - auto-decomposition: identify det sub-regions inside nondet/semidet functions, extract them into separate det functions with their free variables as explicit parameters; or at minimum warn that a large det sub-expression exists and could be extracted
 
 the point of the type system is to compile time check before running the kernel, since the mce is threaded im using the same thread as the kernel is doing, so i cant leave anything on there
 
 refine the readme and add 2 gifs of running
+
+
+common subexpression elimination
+loop-invariant code motion
+binding-time analysis
+Partial Evaluation and Automatic Program Generation Carsten Gomard 1993
