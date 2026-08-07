@@ -2,6 +2,7 @@
 
 :- use_module(library(lists)).
 :- use_module(builder).
+:- use_module(effects).
 
 %% transform_program(+Forms, -Result)
 %% Result = ok(Defs) | error(Msg)
@@ -174,9 +175,7 @@ effect_bracket_syms([sym(Level)], Level) :- effect_level_sym(Level).
 effect_bracket_syms([sym(Level), sym(inline)], inline(Level)) :- effect_level_sym(Level).
 effect_bracket_syms([sym(inline), sym(Level)], inline(Level)) :- effect_level_sym(Level).
 
-effect_level_sym(det).
-effect_level_sym(semidet).
-effect_level_sym(nondet).
+effect_level_sym(Level) :- effects:effect_level(Level, _).
 
 transform_type(sym(int), int).
 transform_type(sym(byte), byte).

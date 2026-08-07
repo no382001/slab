@@ -24,6 +24,7 @@
 
 :- use_module(library(lists)).
 :- use_module(library(error)).
+:- use_module(effects).
 
 %% ---- literals & variable references ----
 
@@ -98,9 +99,7 @@ mk_effect_inline(Level, inline(Level)) :-
     ; throw(builder_error(mk_effect_inline-level, invalid_effect_level(Level)))
     ).
 
-valid_effect_level(det). % TODO: should come from ast
-valid_effect_level(semidet).
-valid_effect_level(nondet).
+valid_effect_level(Level) :- effects:effect_level(Level, _).
 
 %% ---- top-level forms ----
 

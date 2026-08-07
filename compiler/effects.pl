@@ -1,4 +1,4 @@
-:- module(effects, [infer_effects/2, effect_join/3, check_annotations/4, collect_effect_warnings/3]).
+:- module(effects, [infer_effects/2, effect_join/3, check_annotations/4, collect_effect_warnings/3, effect_level/2]).
 
 :- use_module(library(lists)).
 
