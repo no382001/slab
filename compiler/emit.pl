@@ -1,6 +1,7 @@
 :- module(emit, [emit_binary/2]).
 
 :- use_module(library(lists)).
+:- use_module(library(dcgs)).
 :- use_module('../gen/gen').
 
 %% ============================================================
@@ -46,7 +47,7 @@ encode_tokens([], _, []).
 encode_tokens([Token | Rest], Labels, Bytes) :-
     encode_token(Token, Labels, TBytes),
     encode_tokens(Rest, Labels, RestBytes),
-    append(TBytes, RestBytes, Bytes).
+    phrase((seq(TBytes), seq(RestBytes)), Bytes).
 
 %% label — emits nothing
 encode_token(label(_), _, []).
@@ -57,7 +58,7 @@ encode_token(lit(N), _, Bytes) :-
     gen:cell_size(CS),
     encode_cell(CS, Op, OpBytes),
     encode_cell(CS, N, ValBytes),
-    append(OpBytes, ValBytes, Bytes).
+    phrase((seq(OpBytes), seq(ValBytes)), Bytes).
 
 %% rpick: rpick opcode + depth
 encode_token(rpick(N), _, Bytes) :-
@@ -65,7 +66,7 @@ encode_token(rpick(N), _, Bytes) :-
     gen:cell_size(CS),
     encode_cell(CS, Op, OpBytes),
     encode_cell(CS, N, DepthBytes),
-    append(OpBytes, DepthBytes, Bytes).
+    phrase((seq(OpBytes), seq(DepthBytes)), Bytes).
 
 %% opcode
 encode_token(op(Name), _, Bytes) :-
@@ -80,7 +81,7 @@ encode_token(call(Label), Labels, Bytes) :-
     gen:cell_size(CS),
     encode_cell(CS, Op, OpBytes),
     encode_cell(CS, Addr, AddrBytes),
-    append(OpBytes, AddrBytes, Bytes).
+    phrase((seq(OpBytes), seq(AddrBytes)), Bytes).
 
 %% branch label
 encode_token(branch(Label), Labels, Bytes) :-
@@ -89,7 +90,7 @@ encode_token(branch(Label), Labels, Bytes) :-
     gen:cell_size(CS),
     encode_cell(CS, Op, OpBytes),
     encode_cell(CS, Addr, AddrBytes),
-    append(OpBytes, AddrBytes, Bytes).
+    phrase((seq(OpBytes), seq(AddrBytes)), Bytes).
 
 %% zbranch label
 encode_token(zbranch(Label), Labels, Bytes) :-
@@ -98,7 +99,7 @@ encode_token(zbranch(Label), Labels, Bytes) :-
     gen:cell_size(CS),
     encode_cell(CS, Op, OpBytes),
     encode_cell(CS, Addr, AddrBytes),
-    append(OpBytes, AddrBytes, Bytes).
+    phrase((seq(OpBytes), seq(AddrBytes)), Bytes).
 
 %% lit_label: push a label's address as a literal
 encode_token(lit_label(Label), Labels, Bytes) :-
@@ -107,7 +108,7 @@ encode_token(lit_label(Label), Labels, Bytes) :-
     gen:cell_size(CS),
     encode_cell(CS, Op, OpBytes),
     encode_cell(CS, Addr, AddrBytes),
-    append(OpBytes, AddrBytes, Bytes).
+    phrase((seq(OpBytes), seq(AddrBytes)), Bytes).
 
 %% raw byte
 encode_token(byte(B), _, [B]).

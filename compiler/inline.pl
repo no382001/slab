@@ -1,6 +1,7 @@
 :- module(inline, [inline_calls/2, inline_warnings/2]).
 
 :- use_module(library(lists)).
+:- use_module(library(dcgs)).
 :- use_module(builder).
 
 inline_calls(Defs, InlinedDefs) :-
@@ -145,7 +146,7 @@ fresh_names([param(Name, _) | Rest], [Name-Fresh | RestR]) :-
     assertz(inline_counter(N1)),
     number_chars(N1, NChars),
     atom_chars(Name, NameChars),
-    append(['_', i, n, l, '_' | NChars], ['_' | NameChars], FreshChars),
+    phrase((['_', i, n, l, '_'], seq(NChars), ['_'], seq(NameChars)), FreshChars),
     atom_chars(Fresh, FreshChars),
     fresh_names(Rest, RestR).
 

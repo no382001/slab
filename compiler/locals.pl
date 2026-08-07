@@ -1,6 +1,7 @@
 :- module(locals, [expand_locals/4]).
 
 :- use_module(library(lists)).
+:- use_module(library(dcgs)).
 :- use_module(builder).
 
 %% expand_locals(+Defs, +SlotBase, -ExpandedDefs, -NewSlotBase)
@@ -9,7 +10,7 @@ expand_locals([def(Name, Params, RetType, Decl, Body) | Rest], Slot0, AllDefs, S
     !,
     expand_exprs([], Slot0, Body, NewBody, [], ConstDefs, Slot1),
     expand_locals(Rest, Slot1, RestDefs, SlotFinal),
-    append(ConstDefs, [def(Name, Params, RetType, Decl, NewBody) | RestDefs], AllDefs).
+    phrase((seq(ConstDefs), [def(Name, Params, RetType, Decl, NewBody)], seq(RestDefs)), AllDefs).
 expand_locals([Other | Rest], Slot0, [Other | RestDefs], SlotFinal) :-
     expand_locals(Rest, Slot0, RestDefs, SlotFinal).
 
@@ -74,7 +75,7 @@ expand_expr(Renames, Slot0, let(Bindings, Body), let(NBindings, NBody), CD0, CD2
 expand_expr(Renames, Slot0, local(Bindings, Body), Result, CD0, CD2, Slot2) :-
     expand_local_bindings(Renames, Slot0, Bindings, InitStores, CD0, CD1, Slot1, Renames1),
     expand_exprs(Renames1, Slot1, Body, NBody, CD1, CD2, Slot2),
-    append(InitStores, NBody, AllExprs),
+    phrase((seq(InitStores), seq(NBody)), AllExprs),
     builder:mk_do(AllExprs, Result).
 
 expand_let_bindings(Renames, Slot, [], [], CD, CD, Slot, Renames).
@@ -110,5 +111,5 @@ fresh_local_name(Name, Fresh) :-
     assertz(local_counter(N1)),
     number_chars(N1, NChars),
     atom_chars(Name, NameChars),
-    append(['_', l, o, c, '_' | NChars], ['_' | NameChars], FreshChars),
+    phrase((['_', l, o, c, '_'], seq(NChars), ['_'], seq(NameChars)), FreshChars),
     atom_chars(Fresh, FreshChars).

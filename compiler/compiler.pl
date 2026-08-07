@@ -17,6 +17,7 @@
 :- use_module(library(format)).
 :- use_module(library(charsio)).
 :- use_module(library(iso_ext)).
+:- use_module(library(dcgs)).
 
 %% compile_source(+Source, -Result)
 %% Result = ok(Bytes) | error(Stage, Detail)
@@ -68,7 +69,7 @@ compile_source_with_includes(Source, BaseDir, Target, Result) :-
     ; ParseResult = ok(Forms),
       compute_def_lines(Source, MainDefLines),
       expand_includes(Forms, BaseDir, IncExpanded, IncDefLines),
-      append(MainDefLines, IncDefLines, DefLines),
+      phrase((seq(MainDefLines), seq(IncDefLines)), DefLines),
       expand_metas(IncExpanded, Expanded, FinalPtr),
       ( Target = parsed ->
           Result = ok(Expanded)
@@ -128,7 +129,7 @@ compile_from_forms(Forms, Target, DefLines, SlotBase, Result) :-
                       Result = ok(Tokens)
                   ;
                       ( member(label(main), Tokens) ->
-                          append([branch(main)], Tokens, AllTokens),
+                          phrase(([branch(main)], seq(Tokens)), AllTokens),
                           emit:emit_binary(AllTokens, Bytes),
                           Result = ok(Bytes)
                       ;
@@ -152,7 +153,7 @@ expand_includes([], _, [], []).
 expand_includes([list([sym('$include'), str(File)])|Rest], BaseDir, Expanded, DefLines) :-
     !,
     atom_chars(BaseDir, BaseDirChars),
-    append(BaseDirChars, File, FullPathChars),
+    phrase((seq(BaseDirChars), seq(File)), FullPathChars),
     atom_chars(FullPath, FullPathChars),
     read_source(FullPath, IncChars),
     parser:parse(IncChars, IncResult),
@@ -162,9 +163,8 @@ expand_includes([list([sym('$include'), str(File)])|Rest], BaseDir, Expanded, De
         file_directory(FullPath, IncDir),
         expand_includes(IncForms, IncDir, ExpandedInc, IncDefLines),
         expand_includes(Rest, BaseDir, ExpandedRest, RestDefLines),
-        append(ExpandedInc, ExpandedRest, Expanded),
-        append(FileDefLines, IncDefLines, DL1),
-        append(DL1, RestDefLines, DefLines)
+        phrase((seq(ExpandedInc), seq(ExpandedRest)), Expanded),
+        phrase((seq(FileDefLines), seq(IncDefLines), seq(RestDefLines)), DefLines)
     ;
         format("include error: ~w: ~w~n", [File, IncResult]),
         halt(1)
@@ -236,18 +236,18 @@ file_directory(Path, Dir) :-
 %% ANSI color helpers
 esc_code(Codes) :- char_code(Esc, 27), Codes = [Esc, '['].
 
-ansi_bold(Text, Colored) :-
-    esc_code(E), append(E, "1m", Pre),
-    esc_code(E2), append(E2, "0m", Post),
-    append(Pre, Text, P1), append(P1, Post, Colored).
-ansi_red(Text, Colored) :-
-    esc_code(E), append(E, "1;31m", Pre),
-    esc_code(E2), append(E2, "0m", Post),
-    append(Pre, Text, P1), append(P1, Post, Colored).
-ansi_yellow(Text, Colored) :-
-    esc_code(E), append(E, "1;35m", Pre),
-    esc_code(E2), append(E2, "0m", Post),
-    append(Pre, Text, P1), append(P1, Post, Colored).
+ansi_color_code(bold,   "1").
+ansi_color_code(red,    "1;31").
+ansi_color_code(yellow, "1;35").
+
+ansi(Color, Text, Colored) :-
+    esc_code(Esc),
+    ansi_color_code(Color, Code),
+    phrase((seq(Esc), seq(Code), "m", seq(Text), seq(Esc), "0m"), Colored).
+
+ansi_bold(Text, Colored) :- ansi(bold, Text, Colored).
+ansi_red(Text, Colored) :- ansi(red, Text, Colored).
+ansi_yellow(Text, Colored) :- ansi(yellow, Text, Colored).
 
 %% effect annotation warnings to stderr
 warn_effects([]).
@@ -256,11 +256,8 @@ warn_effects([unannotated(Name, Inferred)|Rest]) :-
     atom_chars(Inferred, InfChars),
     ansi_yellow("warning:", WarnTag),
     ansi_bold(NameChars, BoldName),
-    append(WarnTag, " '", P1),
-    append(P1, BoldName, P2),
-    append(P2, "' has no effect annotation, inferred [", P3),
-    append(P3, InfChars, P4),
-    append(P4, "]\n", Msg),
+    phrase((seq(WarnTag), " '", seq(BoldName),
+            "' has no effect annotation, inferred [", seq(InfChars), "]\n"), Msg),
     write_stderr(Msg),
     warn_effects(Rest).
 warn_effects([overpermissive(Name, Decl, Inferred)|Rest]) :-
@@ -269,13 +266,8 @@ warn_effects([overpermissive(Name, Decl, Inferred)|Rest]) :-
     atom_chars(Inferred, InfChars),
     ansi_yellow("warning:", WarnTag),
     ansi_bold(NameChars, BoldName),
-    append(WarnTag, " '", P1),
-    append(P1, BoldName, P2),
-    append(P2, "' declared [", P3),
-    append(P3, DeclChars, P4),
-    append(P4, "] but inferred [", P5),
-    append(P5, InfChars, P6),
-    append(P6, "] (annotation is too permissive)\n", Msg),
+    phrase((seq(WarnTag), " '", seq(BoldName), "' declared [", seq(DeclChars),
+            "] but inferred [", seq(InfChars), "] (annotation is too permissive)\n"), Msg),
     write_stderr(Msg),
     warn_effects(Rest).
 
@@ -286,11 +278,7 @@ warn_dead_code([Kind-Name|Rest]) :-
     kind_label(Kind, KindLabel),
     ansi_yellow("warning:", WarnTag),
     ansi_bold(NameChars, BoldName),
-    append(WarnTag, " unused ", P1),
-    append(P1, KindLabel, P2),
-    append(P2, " '", P3),
-    append(P3, BoldName, P4),
-    append(P4, "'\n", Msg),
+    phrase((seq(WarnTag), " unused ", seq(KindLabel), " '", seq(BoldName), "'\n"), Msg),
     write_stderr(Msg),
     warn_dead_code(Rest).
 
@@ -307,11 +295,8 @@ warn_inline_reason(Name, Reason) :-
     atom_chars(Name, NameChars),
     ansi_yellow("warning:", WarnTag),
     ansi_bold(NameChars, BoldName),
-    append(WarnTag, " '", P1),
-    append(P1, BoldName, P2),
-    append(P2, "' declared [inline] but ", P3),
-    append(P3, Reason, P4),
-    append(P4, ", ignoring hint\n", Msg),
+    phrase((seq(WarnTag), " '", seq(BoldName), "' declared [inline] but ",
+            seq(Reason), ", ignoring hint\n"), Msg),
     write_stderr(Msg).
 
 kind_label(func,   "function").
@@ -328,12 +313,8 @@ format_typecheck_errors([return_type_mismatch(Name, Expected)|Rest], DefLines) :
     ansi_bold(LocCs, BoldLoc),
     ansi_red("error:", ErrTag),
     ansi_bold(NameCs, BoldName),
-    append(BoldLoc, ErrTag, P1),
-    append(P1, " '", P2),
-    append(P2, BoldName, P3),
-    append(P3, "' return type mismatch, expected ", P4),
-    append(P4, ExpCs, P5),
-    append(P5, "\n", Msg),
+    phrase((seq(BoldLoc), seq(ErrTag), " '", seq(BoldName),
+            "' return type mismatch, expected ", seq(ExpCs), "\n"), Msg),
     write_stderr(Msg),
     format_typecheck_errors(Rest, DefLines).
 format_typecheck_errors([type_mismatch(const, Name, Type)|Rest], DefLines) :-
@@ -344,25 +325,19 @@ format_typecheck_errors([type_mismatch(const, Name, Type)|Rest], DefLines) :-
     ansi_bold(LocCs, BoldLoc),
     ansi_red("error:", ErrTag),
     ansi_bold(NameCs, BoldName),
-    append(BoldLoc, ErrTag, P1),
-    append(P1, " const '", P2),
-    append(P2, BoldName, P3),
-    append(P3, "' type mismatch, declared ", P4),
-    append(P4, TypeCs, P5),
-    append(P5, "\n", Msg),
+    phrase((seq(BoldLoc), seq(ErrTag), " const '", seq(BoldName),
+            "' type mismatch, declared ", seq(TypeCs), "\n"), Msg),
     write_stderr(Msg),
     format_typecheck_errors(Rest, DefLines).
 format_typecheck_errors([while_cond_not_bool|Rest], DefLines) :-
     ansi_red("error:", ErrTag),
-    append(ErrTag, " while condition must be bool\n", Msg),
+    phrase((seq(ErrTag), " while condition must be bool\n"), Msg),
     write_stderr(Msg),
     format_typecheck_errors(Rest, DefLines).
 format_typecheck_errors([type_error(Expr)|Rest], DefLines) :-
     ansi_red("error:", ErrTag),
-    append(ErrTag, " type error in expression: ", P1),
     with_output_to(chars(ExprCs), write(Expr)),
-    append(P1, ExprCs, P2),
-    append(P2, "\n", Msg),
+    phrase((seq(ErrTag), " type error in expression: ", seq(ExprCs), "\n"), Msg),
     write_stderr(Msg),
     format_typecheck_errors(Rest, DefLines).
 format_typecheck_errors([_|Rest], DefLines) :-
@@ -378,32 +353,20 @@ format_effect_errors([effect_mismatch(Name, Decl, Inferred, Loc)|Rest]) :-
     ansi_bold(LocCs, BoldLoc),
     ansi_red("error:", ErrTag),
     ansi_bold(NameCs, BoldName),
-    append(BoldLoc, ErrTag, P1),
-    append(P1, " '", P2),
-    append(P2, BoldName, P3),
-    append(P3, "' declared [", P4),
-    append(P4, DeclCs, P5),
-    append(P5, "] but inferred ", P6),
-    append(P6, InfCs, P7),
-    append(P7, "\n", Msg),
+    phrase((seq(BoldLoc), seq(ErrTag), " '", seq(BoldName), "' declared [",
+            seq(DeclCs), "] but inferred ", seq(InfCs), "\n"), Msg),
     maplist(put_char, Msg),
     format_effect_errors(Rest).
 
 format_loc(loc(L, C), Cs) :-
     number_chars(L, LCs),
     number_chars(C, CCs),
-    append(LCs, ":", P1),
-    append(P1, CCs, P2),
-    append(P2, ": ", Cs).
+    phrase((seq(LCs), ":", seq(CCs), ": "), Cs).
 format_loc(loc(File, L, C), Cs) :-
     atom_chars(File, FCs),
     number_chars(L, LCs),
     number_chars(C, CCs),
-    append(FCs, ":", P1),
-    append(P1, LCs, P2),
-    append(P2, ":", P3),
-    append(P3, CCs, P4),
-    append(P4, ": ", Cs).
+    phrase((seq(FCs), ":", seq(LCs), ":", seq(CCs), ": "), Cs).
 format_loc(unknown, "").
 
 %% ============================================================
@@ -477,16 +440,13 @@ format_paren_error(error(unclosed(Ch), loc(L, C))) :-
     format_loc(loc(L, C), LocCs),
     ansi_bold(LocCs, BoldLoc),
     ansi_red("error:", ErrTag),
-    append(BoldLoc, ErrTag, P1),
-    append(P1, " unclosed '", P2),
-    append(P2, [Ch, '\'', '\n'], Msg),
+    phrase((seq(BoldLoc), seq(ErrTag), " unclosed '", [Ch], "'\n"), Msg),
     write_stderr(Msg).
 format_paren_error(error(extra_close, loc(L, C))) :-
     format_loc(loc(L, C), LocCs),
     ansi_bold(LocCs, BoldLoc),
     ansi_red("error:", ErrTag),
-    append(BoldLoc, ErrTag, P1),
-    append(P1, " unexpected ')'\n", Msg),
+    phrase((seq(BoldLoc), seq(ErrTag), " unexpected ')'\n"), Msg),
     write_stderr(Msg).
 
 write_stderr(Msg) :-
@@ -514,7 +474,7 @@ def_lines_file_(F, L, Col, Map) --> [;], !, skip_comment,
 def_lines_file_(F, L, Col, [Name-loc(F,L,Col)|Map]) -->
     "(def ", !, scan_def_name(NameCs),
     { atom_chars(Name, NameCs),
-      length(['(', d, e, f, ' '|NameCs], Skip),
+      length(NameCs, NameLen), Skip is NameLen + 5,  % "(def " is 5 chars
       Col1 is Col + Skip },
     def_lines_file_(F, L, Col1, Map).
 def_lines_file_(F, L, Col, Map) --> [_], !, { Col1 is Col+1 },
@@ -528,7 +488,7 @@ def_lines_(L, Col, Map) --> [;], !, skip_comment,
 def_lines_(L, Col, [Name-loc(L,Col)|Map]) -->
     "(def ", !, scan_def_name(NameCs),
     { atom_chars(Name, NameCs),
-      length(['(', d, e, f, ' '|NameCs], Skip),
+      length(NameCs, NameLen), Skip is NameLen + 5,  % "(def " is 5 chars
       Col1 is Col + Skip },
     def_lines_(L, Col1, Map).
 def_lines_(L, Col, Map) --> [_], !, { Col1 is Col+1 },

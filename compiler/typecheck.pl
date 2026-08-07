@@ -1,6 +1,7 @@
 :- module(typecheck, [check_program/2]).
 
 :- use_module(library(lists)).
+:- use_module(library(dcgs)).
 
 %% ============================================================
 %% entry point
@@ -55,7 +56,7 @@ check_defs([], _, []).
 check_defs([Def | Rest], FuncEnv, Errors) :-
     check_def(Def, FuncEnv, DefErrors),
     check_defs(Rest, FuncEnv, RestErrors),
-    append(DefErrors, RestErrors, Errors).
+    phrase((seq(DefErrors), seq(RestErrors)), Errors).
 
 check_def(extern(_, _, _), _, []).
 check_def(extern(_, _, _, _), _, []).
@@ -96,7 +97,7 @@ check_body([Expr | Rest], Env, FEnv, RetType, FName, Errors) :-
     Rest = [_|_],
     check_expr_for_side_effects(Env, FEnv, Expr, ExprErrors, Env1),
     check_body(Rest, Env1, FEnv, RetType, FName, RestErrors),
-    append(ExprErrors, RestErrors, Errors).
+    phrase((seq(ExprErrors), seq(RestErrors)), Errors).
 
 %% expressions used for side effects (middle of body)
 check_expr_for_side_effects(Env, FEnv, Expr, Errors, NewEnv) :-
@@ -104,7 +105,7 @@ check_expr_for_side_effects(Env, FEnv, Expr, Errors, NewEnv) :-
         check_let_bindings(Bindings, Env, FEnv, [], BindErrors, ExtEnv),
         Expr = let(_, LetBody),
         check_let_body(LetBody, ExtEnv, FEnv, LetBodyErrors),
-        append(BindErrors, LetBodyErrors, Errors),
+        phrase((seq(BindErrors), seq(LetBodyErrors)), Errors),
         NewEnv = Env  % let doesn't leak scope
     ; Expr = while(Cond, _), \+ infer(Env, FEnv, Cond, bool) ->
         Errors = [while_cond_not_bool],
@@ -263,7 +264,7 @@ check_let_body([E | Rest], Env, FEnv, Errors) :-
     Rest = [_|_],
     ( infer(Env, FEnv, E, _) -> E1Errors = [] ; E1Errors = [type_error(E)] ),
     check_let_body(Rest, Env, FEnv, RestErrors),
-    append(E1Errors, RestErrors, Errors).
+    phrase((seq(E1Errors), seq(RestErrors)), Errors).
 
 check_args([], [], _, _).
 check_args([A | As], [T | Ts], Env, FEnv) :-
