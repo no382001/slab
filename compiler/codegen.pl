@@ -1,6 +1,7 @@
 :- module(codegen, [compile_program/3]).
 
 :- use_module(library(lists)).
+:- use_module(builder).
 
 :- dynamic(user_void_func/1).
 :- dynamic(ext_trap/3). % ext_trap(Name, Code, Ret)
@@ -190,13 +191,24 @@ rest_prologue(CountSlot, RestSlot, RestBase, IterSlot, Consts, LN0, Code, LN) :-
     append(LoopConsts, Consts, ExtConsts),
     PopCount = [lit(CountSlot), op(!)],
     BindRestPtr = [lit(RestBase), lit(RestSlot), op(!)],
-    InitIter = !(var(rest_iter_sym), binop(-, @(var(rest_count_sym)), num(1))),
+    builder:mk_var(rest_iter_sym, IterVar),
+    builder:mk_var(rest_count_sym, CountVar),
+    builder:mk_var(rest_base_sym, BaseVar),
+    builder:mk_deref(CountVar, CountVal),
+    builder:mk_num(1, One),
+    builder:mk_binop(-, CountVal, One, InitVal),
+    builder:mk_store(IterVar, InitVal, InitIter),
     compile_expr(InitIter, [], ExtConsts, LN0, 0, InitIterCode, LN1),
-    Cond = binop(>=, @(var(rest_iter_sym)), num(0)),
+    builder:mk_deref(IterVar, IterVal),
+    builder:mk_num(0, Zero),
+    builder:mk_binop(>=, IterVal, Zero, Cond),
     compile_expr(Cond, [], ExtConsts, LN1, 0, CondCode, LN2),
-    AddrExpr = binop(+, var(rest_base_sym), binop(*, @(var(rest_iter_sym)), num(2))),
+    builder:mk_num(2, Two),
+    builder:mk_binop(*, IterVal, Two, IterOffset),
+    builder:mk_binop(+, BaseVar, IterOffset, AddrExpr),
     compile_expr(AddrExpr, [], ExtConsts, LN2, 0, AddrCode, LN3),
-    Decr = !(var(rest_iter_sym), binop(-, @(var(rest_iter_sym)), num(1))),
+    builder:mk_binop(-, IterVal, One, DecrVal),
+    builder:mk_store(IterVar, DecrVal, Decr),
     compile_expr(Decr, [], ExtConsts, LN3, 0, DecrCode, LN4),
     genlabel(LN4, "_restpop_", StartL, LN5),
     genlabel(LN5, "_restend_", EndL, LN),

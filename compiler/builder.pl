@@ -14,6 +14,10 @@
     mk_const/4
 ]).
 
+%% NOTE: there is a mixed pattern currently, most passes build ast nodes on their own
+%% but this will be useful for languages that compile to sets, so i want to use
+%% this pattern wherever i can but i wont touch direct build sites
+
 :- use_module(library(lists)).
 
 
@@ -79,7 +83,7 @@ mk_effect_inline(Level, inline(Level)) :-
     ; throw(builder_error(invalid_effect_level(Level)))
     ).
 
-valid_effect_level(det).
+valid_effect_level(det). % TODO: should come from ast
 valid_effect_level(semidet).
 valid_effect_level(nondet).
 
@@ -102,5 +106,6 @@ mk_const(Name, Type, Val, const(Name, Type, Val)) :- atom(Name).
 %% ---- helpers ----
 
 %% library(lists) here doesn't export is_list/1
+%% TODO why is this here?
 proper_list([]).
 proper_list([_|T]) :- proper_list(T).

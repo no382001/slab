@@ -1,6 +1,7 @@
 :- module(locals, [expand_locals/4]).
 
 :- use_module(library(lists)).
+:- use_module(builder).
 
 %% expand_locals(+Defs, +SlotBase, -ExpandedDefs, -NewSlotBase)
 expand_locals([], Slot, [], Slot).
@@ -70,10 +71,11 @@ expand_expr(Renames, Slot0, let(Bindings, Body), let(NBindings, NBody), CD0, CD2
     expand_let_bindings(Renames, Slot0, Bindings, NBindings, CD0, CD1, Slot1, Renames1),
     expand_exprs(Renames1, Slot1, Body, NBody, CD1, CD2, Slot2).
 
-expand_expr(Renames, Slot0, local(Bindings, Body), do(AllExprs), CD0, CD2, Slot2) :-
+expand_expr(Renames, Slot0, local(Bindings, Body), Result, CD0, CD2, Slot2) :-
     expand_local_bindings(Renames, Slot0, Bindings, InitStores, CD0, CD1, Slot1, Renames1),
     expand_exprs(Renames1, Slot1, Body, NBody, CD1, CD2, Slot2),
-    append(InitStores, NBody, AllExprs).
+    append(InitStores, NBody, AllExprs),
+    builder:mk_do(AllExprs, Result).
 
 expand_let_bindings(Renames, Slot, [], [], CD, CD, Slot, Renames).
 expand_let_bindings(Renames, Slot0, [bind(Name, Expr) | Rest], [bind(Name, NExpr) | NRest], CD0, CD2, Slot2, FinalRenames) :-
@@ -87,9 +89,12 @@ expand_local_bindings(Renames, Slot0, [bind(Name, Expr) | Rest], [Store | RestSt
     fresh_local_name(Name, Fresh),
     Addr = Slot1,
     Slot1a is Slot1 + 2,
-    Store = !(var(Fresh), NExpr),
+    builder:mk_var(Fresh, FreshVar),
+    builder:mk_store(FreshVar, NExpr, Store),
+    builder:mk_num(Addr, AddrNum),
+    builder:mk_const(Fresh, int, AddrNum, ConstDef),
     expand_local_bindings([Name-Fresh | Renames], Slot1a, Rest, RestStores,
-                           [const(Fresh, int, num(Addr)) | CD1], CD2, Slot2, FinalRenames).
+                           [ConstDef | CD1], CD2, Slot2, FinalRenames).
 
 drop_rename(_, [], []).
 drop_rename(Name, [Name-_ | Rest], Rest) :- !.

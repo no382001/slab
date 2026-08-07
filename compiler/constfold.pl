@@ -1,6 +1,7 @@
 :- module(constfold, [fold_constants/3]).
 
 :- use_module(library(lists)).
+:- use_module(builder).
 
 %% ============================================================
 %% entry point
@@ -47,7 +48,7 @@ fold_expr(DetFns, binop(Op, A, B), Result) :-
     fold_expr(DetFns, B, FB),
     ( FA = num(NA), FB = num(NB) ->
         eval_binop(Op, NA, NB, R),
-        Result = num(R)
+        builder:mk_num(R, Result)
     ;
         Result = binop(Op, FA, FB)
     ).
@@ -93,7 +94,7 @@ fold_expr(DetFns, call(Name, Args), Result) :-
       member(detfn(Name, Params, Body), DetFns) ->
         bind_params(Params, FArgs, Env),
         ( eval_body(DetFns, Env, Body, 1000, Val, _) ->
-            Result = num(Val)
+            builder:mk_num(Val, Result)
         ;
             Result = call(Name, FArgs)
         )
