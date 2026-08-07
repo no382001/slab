@@ -408,7 +408,7 @@ genlabel(N, Prefix, Label, N1) :-
 op_to_vm(+, [op(+)]).
 op_to_vm(-, [op(-)]).
 op_to_vm(*, [op(*)]).
-op_to_vm(/, [op('/')]).
+op_to_vm(/, [op(/)]).
 op_to_vm(mod, [op(mod)]).
 op_to_vm(and, [op(and)]).
 op_to_vm(or, [op(or)]).

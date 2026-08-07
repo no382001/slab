@@ -145,7 +145,7 @@ fresh_names([param(Name, _) | Rest], [Name-Fresh | RestR]) :-
     assertz(inline_counter(N1)),
     number_chars(N1, NChars),
     atom_chars(Name, NameChars),
-    append(['_', 'i', 'n', 'l', '_' | NChars], ['_' | NameChars], FreshChars),
+    append(['_', i, n, l, '_' | NChars], ['_' | NameChars], FreshChars),
     atom_chars(Fresh, FreshChars),
     fresh_names(Rest, RestR).
 

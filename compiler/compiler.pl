@@ -226,11 +226,11 @@ expand_meta_expr(X, X).
 file_directory(Path, Dir) :-
     atom_chars(Path, Chars),
     reverse(Chars, Rev),
-    ( append(_, ['/'|DirRev], Rev) ->
-        reverse(['/'|DirRev], DirChars),
+    ( append(_, [/|DirRev], Rev) ->
+        reverse([/|DirRev], DirChars),
         atom_chars(Dir, DirChars)
     ;
-        Dir = './'
+        Dir = ./
     ).
 
 %% ANSI color helpers
@@ -420,7 +420,7 @@ paren_scan([], _, _, 0, _, ok) :- !.
 paren_scan([], _, _, _, [open(Ch,L,C)|_], error(unclosed(Ch), loc(L,C))) :- !.
 paren_scan(['\n'|Rest], L, _, D, Stk, R) :- !,
     L1 is L+1, paren_scan(Rest, L1, 1, D, Stk, R).
-paren_scan([';'|Rest], L, _, D, Stk, R) :- !,
+paren_scan([;|Rest], L, _, D, Stk, R) :- !,
     skip_to_nl(Rest, L, Rest1, L1),
     paren_scan(Rest1, L1, 1, D, Stk, R).
 paren_scan(['"'|Rest], L, C, D, Stk, R) :- !,
@@ -509,12 +509,12 @@ compute_def_lines_file(Source, File, Map) :-
 
 def_lines_file_(F, L, _, Map) --> ['\n'], !, { L1 is L+1 },
     def_lines_file_(F, L1, 1, Map).
-def_lines_file_(F, L, Col, Map) --> [';'], !, skip_comment,
+def_lines_file_(F, L, Col, Map) --> [;], !, skip_comment,
     def_lines_file_(F, L, Col, Map).
 def_lines_file_(F, L, Col, [Name-loc(F,L,Col)|Map]) -->
     "(def ", !, scan_def_name(NameCs),
     { atom_chars(Name, NameCs),
-      length(['(','d','e','f',' '|NameCs], Skip),
+      length(['(', d, e, f, ' '|NameCs], Skip),
       Col1 is Col + Skip },
     def_lines_file_(F, L, Col1, Map).
 def_lines_file_(F, L, Col, Map) --> [_], !, { Col1 is Col+1 },
@@ -523,12 +523,12 @@ def_lines_file_(_, _, _, []) --> [].
 
 def_lines_(L, _, Map) --> ['\n'], !, { L1 is L+1 },
     def_lines_(L1, 1, Map).
-def_lines_(L, Col, Map) --> [';'], !, skip_comment,
+def_lines_(L, Col, Map) --> [;], !, skip_comment,
     def_lines_(L, Col, Map).
 def_lines_(L, Col, [Name-loc(L,Col)|Map]) -->
     "(def ", !, scan_def_name(NameCs),
     { atom_chars(Name, NameCs),
-      length(['(','d','e','f',' '|NameCs], Skip),
+      length(['(', d, e, f, ' '|NameCs], Skip),
       Col1 is Col + Skip },
     def_lines_(L, Col1, Map).
 def_lines_(L, Col, Map) --> [_], !, { Col1 is Col+1 },

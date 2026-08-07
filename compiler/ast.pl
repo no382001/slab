@@ -148,7 +148,7 @@ transform_param(sym(Name), Result) :- builder:mk_param(Name, int, Result).  % de
 transform_param(list([sym(Name), sym(:), TypeSym]), Result) :-
     transform_type(TypeSym, Type),
     builder:mk_param(Name, Type, Result).
-transform_param(list([sym(Name), sym(:), TypeSym, sym('...')]),
+transform_param(list([sym(Name), sym(:), TypeSym, sym(...)]),
                  Result) :-
     transform_type(TypeSym, Type),
     builder:mk_rest_param(Name, Type, Result).

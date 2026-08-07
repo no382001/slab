@@ -110,5 +110,5 @@ fresh_local_name(Name, Fresh) :-
     assertz(local_counter(N1)),
     number_chars(N1, NChars),
     atom_chars(Name, NameChars),
-    append(['_', 'l', 'o', 'c', '_' | NChars], ['_' | NameChars], FreshChars),
+    append(['_', l, o, c, '_' | NChars], ['_' | NameChars], FreshChars),
     atom_chars(Fresh, FreshChars).

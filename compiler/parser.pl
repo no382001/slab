@@ -45,7 +45,7 @@ list_elems([]) --> [].
 %% numbers: optional minus then digits
 %% ============================================================
 
-num_chars(['-'|Ds]) --> ['-'], digits1(Ds).
+num_chars([-|Ds]) --> [-], digits1(Ds).
 num_chars(Ds) --> digits1(Ds).
 
 digits1([D|Ds]) --> [D], { D @>= '0', D @=< '9' }, digits0(Ds).
@@ -61,7 +61,7 @@ sym_chars([C|Cs]) --> [C], { sym_char(C) }, !, sym_chars(Cs).
 sym_chars([]) --> [].
 
 sym_char(C) :-
-    \+ member(C, [' ', '\n', '\t', '\r', '(', ')', '[', ']', '{', '}', '"', ';']).
+    \+ member(C, [' ', '\n', '\t', '\r', '(', ')', '[', ']', '{', '}', '"', ;]).
 
 %% ============================================================
 %% string literals
@@ -75,7 +75,7 @@ string_content([]) --> [].
 %% ============================================================
 
 ws --> [C], { ws_char(C) }, !, ws.
-ws --> [';'], !, skip_to_newline, ws.
+ws --> [;], !, skip_to_newline, ws.
 ws --> [].
 
 ws_char(' ').
