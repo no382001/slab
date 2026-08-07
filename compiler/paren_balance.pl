@@ -20,32 +20,12 @@ paren_scan([;|Rest], L, _, D, Stk, R) :- !,
 paren_scan(['"'|Rest], L, C, D, Stk, R) :- !,
     C1 is C+1, skip_str(Rest, L, C1, Rest1, L1, C2),
     paren_scan(Rest1, L1, C2, D, Stk, R).
-paren_scan(['('|Rest], L, C, D, Stk, R) :- !,
+paren_scan([Ch|Rest], L, C, D, Stk, R) :-
+    open_bracket(Ch), !,
     D1 is D+1, C1 is C+1,
-    paren_scan(Rest, L, C1, D1, [open('(',L,C)|Stk], R).
-paren_scan([')'|Rest], L, C, D, Stk, R) :- !,
-    ( D =:= 0 ->
-        R = error(extra_close, loc(L,C))
-    ;
-        D1 is D-1, C1 is C+1,
-        Stk = [_|Stk1],
-        paren_scan(Rest, L, C1, D1, Stk1, R)
-    ).
-paren_scan(['['|Rest], L, C, D, Stk, R) :- !,
-    D1 is D+1, C1 is C+1,
-    paren_scan(Rest, L, C1, D1, [open('[',L,C)|Stk], R).
-paren_scan([']'|Rest], L, C, D, Stk, R) :- !,
-    ( D =:= 0 ->
-        R = error(extra_close, loc(L,C))
-    ;
-        D1 is D-1, C1 is C+1,
-        Stk = [_|Stk1],
-        paren_scan(Rest, L, C1, D1, Stk1, R)
-    ).
-paren_scan(['{'|Rest], L, C, D, Stk, R) :- !,
-    D1 is D+1, C1 is C+1,
-    paren_scan(Rest, L, C1, D1, [open('{',L,C)|Stk], R).
-paren_scan(['}'|Rest], L, C, D, Stk, R) :- !,
+    paren_scan(Rest, L, C1, D1, [open(Ch,L,C)|Stk], R).
+paren_scan([Ch|Rest], L, C, D, Stk, R) :-
+    close_bracket(Ch), !,
     ( D =:= 0 ->
         R = error(extra_close, loc(L,C))
     ;
@@ -55,6 +35,14 @@ paren_scan(['}'|Rest], L, C, D, Stk, R) :- !,
     ).
 paren_scan([_|Rest], L, C, D, Stk, R) :- !,
     C1 is C+1, paren_scan(Rest, L, C1, D, Stk, R).
+
+open_bracket('(').
+open_bracket('[').
+open_bracket('{').
+
+close_bracket(')').
+close_bracket(']').
+close_bracket('}').
 
 skip_to_nl([], L, [], L1) :- L1 is L+1.
 skip_to_nl(['\n'|Rest], L, Rest, L1) :- !, L1 is L+1.
