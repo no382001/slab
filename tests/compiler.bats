@@ -610,3 +610,74 @@ setup() {
   result="$(compile '(def h ((first : int) (rest : int ...)) : int first) (def main () : void (emit (h 1 2 3)) (bye))' ir)"
   [[ "$result" == *"label(h)"* ]]
 }
+
+@test "cse: a duplicate occurring only twice is not hoisted (unprofitable)" {
+  # a two-occurrence duplicate isn't profitable to hoist (this is the
+  # case that regressed chip8.bin by 4 bytes before the check existed)
+  result="$(compile '(def f ((a : int) (b : int)) : int (+ (* a b) (* a b))) (def main () : void (emit (f 5 6)) (bye))' ir)"
+  [ "$(grep -o 'op(\*)' <<< "$result" | wc -l)" -eq 2 ]
+}
+
+@test "cse: a duplicate occurring three times is profitable and gets hoisted" {
+  result="$(compile '(def f ((a : int) (b : int)) : int (+ (+ (* a b) (* a b)) (* a b))) (def main () : void (emit (f 5 6)) (bye))' ir)"
+  [ "$(grep -o 'op(\*)' <<< "$result" | wc -l)" -eq 1 ]
+}
+
+@test "cse: hoisted subexpression runs correctly" {
+  # x is read from memory, so (* x 6) can't fold away — this exercises
+  # the hoisted code actually running
+  result="$(run_program '(const A int 1024) (def main () : void (! A 5) (let ((x (@ A))) (emit (+ (+ (* x 6) (* x 6)) (* x 6)))) (bye))')"
+  [ "$result" = "Z" ]
+}
+
+@test "cse: duplicate spanning multiple statements in the same scope is hoisted" {
+  result="$(compile '(const A int 1024) (def main () : void (! A 5) (let ((x (@ A))) (emit (* x 7)) (emit (* x 7)) (emit (* x 7))) (bye))' ir)"
+  [ "$(grep -o 'op(\*)' <<< "$result" | wc -l)" -eq 1 ]
+}
+
+@test "cse: does not hoist across if branches" {
+  # branches run conditionally; hoisting would run work that might never execute
+  result="$(compile '(const A int 1024) (def main () : void (! A 5) (let ((x (@ A))) (emit (if (> x 0) (* x 3) (+ x 3)))) (bye))' ir)"
+  [ "$(grep -o 'op(\*)' <<< "$result" | wc -l)" -eq 1 ]
+  [ "$(grep -o 'op(+)' <<< "$result" | wc -l)" -eq 1 ]
+}
+
+@test "cse: merges identical if branches" {
+  # both branches compute the same thing, so the branch machinery is pointless
+  result="$(compile '(const A int 1024) (def main () : void (! A 5) (let ((x (@ A))) (emit (if (> x 0) (* x 3) (* x 3)))) (bye))' ir)"
+  [ "$(grep -o 'op(\*)' <<< "$result" | wc -l)" -eq 1 ]
+  [[ "$result" != *"zbranch"* ]]
+}
+
+@test "cse: merged if branches run correctly" {
+  result="$(run_program '(const A int 1024) (def main () : void (! A 20) (let ((x (@ A))) (emit (if (> x 0) (* x 3) (* x 3)))) (bye))')"
+  [ "$result" = "<" ]
+}
+
+@test "cse: does not hoist semidet subexpressions" {
+  # @ is semidet: two reads aren't provably redundant, so both stay
+  result="$(compile '(const A int 1024) (def main () : void (! A 5) (emit (+ (@ A) (@ A))) (bye))' ir)"
+  [ "$(grep -o 'op(@)' <<< "$result" | wc -l)" -eq 2 ]
+}
+
+@test "cse: a single-use det let binding is inlined with zero rack overhead" {
+  result="$(compile '(const A int 1024) (def main () : void (! A 60) (let ((x (@ A))) (let ((y (+ x 1))) (emit y))) (bye))' ir)"
+  # x (semidet) keeps its rack lifecycle; y (det, single-use) should vanish entirely
+  [ "$(grep -o '>r' <<< "$result" | wc -l)" -eq 1 ]
+  [ "$(grep -o 'rpick' <<< "$result" | wc -l)" -eq 1 ]
+}
+
+@test "cse: single-use let elimination runs correctly" {
+  result="$(run_program '(const A int 1024) (def main () : void (! A 60) (let ((x (@ A))) (let ((y (+ x 1))) (emit y))) (bye))')"
+  [ "$result" = "=" ]
+}
+
+@test "cse: a dead det let binding is dropped, computation and all" {
+  result="$(compile '(def main () : void (let ((y (* 999 888))) (emit 65)) (bye))' ir)"
+  [ "$(grep -o 'op(\*)' <<< "$result" | wc -l)" -eq 0 ]
+}
+
+@test "cse: a semidet let binding is never inlined regardless of use count" {
+  result="$(compile '(const A int 1024) (def main () : void (! A 5) (let ((y (@ A))) (emit (+ y 1))) (bye))' ir)"
+  [ "$(grep -o '>r' <<< "$result" | wc -l)" -eq 1 ]
+}

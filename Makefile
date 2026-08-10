@@ -95,7 +95,7 @@ test: quad bats
 
 .PHONY: quad
 quad:
-	@cd compiler && for mod in parser typecheck codegen; do \
+	@cd compiler && for mod in parser typecheck codegen cse; do \
 		scryer-prolog -f -g "use_module(library('numerics/quadtests')), check_module_quads($$mod, _), halt." < /dev/null; \
 	done
 

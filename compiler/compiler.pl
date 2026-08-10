@@ -10,6 +10,7 @@
 :- use_module(effects).
 :- use_module(deadcode).
 :- use_module(constfold).
+:- use_module(cse).
 :- use_module(inline).
 :- use_module(locals).
 :- use_module(diagnostics).
@@ -122,7 +123,9 @@ compile_from_forms(Forms, Target, DefLines, SlotBase, Result) :-
                 inline:inline_calls(TypedDefs, InlinedDefs),
                 %% Stage 3.7: constant folding for det functions
                 constfold:fold_constants(InlinedDefs, EffectEnv, FoldedDefs),
-                codegen:compile_program(FoldedDefs, SlotBase1, CgResult),
+                %% Stage 3.75: common subexpression elimination
+                cse:cse_defs(FoldedDefs, EffectEnv, CsedDefs),
+                codegen:compile_program(CsedDefs, SlotBase1, CgResult),
                 ( CgResult \= ok(_) ->
                     Result = error(codegen, CgResult)
                 ; CgResult = ok(Tokens),
