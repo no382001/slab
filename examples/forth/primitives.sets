@@ -50,13 +50,13 @@
   (let ((a (ds_pop))) (ds_push a) (ds_push a)))
 
 (def f_swap () : void [semidet]
-  (let ((b (ds_pop))) (let ((a (ds_pop))) (ds_push b) (ds_push a))))
+  (let ((b (ds_pop)) (a (ds_pop))) (ds_push b) (ds_push a)))
 
 (def f_drop () : void [semidet]
   (ds_pop) (! NOOP 0))
 
 (def f_over () : void [semidet]
-  (let ((b (ds_pop))) (let ((a (ds_pop))) (ds_push a) (ds_push b) (ds_push a))))
+  (let ((b (ds_pop)) (a (ds_pop))) (ds_push a) (ds_push b) (ds_push a)))
 
 (def f_eq () : void [semidet]
   (let ((b (ds_pop))) (if (= (ds_pop) b) (ds_push -1) (ds_push 0))))
@@ -77,7 +77,8 @@
   (let ((a (ds_pop))) (if (< a 0) (ds_push (- 0 a)) (ds_push a))))
 
 (def f_max () : void [semidet]
-  (let ((b (ds_pop))) (let ((a (ds_pop))) (if (< a b) (ds_push b) (ds_push a)))))
+  (let ((b (ds_pop)) (a (ds_pop)))
+    (if (< a b) (ds_push b) (ds_push a))))
 
 (def f_dot_s () : void [nondet]
   (ds_show))
@@ -107,14 +108,12 @@
   (ds_push (@ (ds_pop))))
 
 (def f_store () : void [semidet]
-  (let ((addr (ds_pop)))
-    (let ((val (ds_pop)))
-      (! addr val))))
+  (let ((addr (ds_pop)) (val (ds_pop)))
+    (! addr val)))
 
 (def f_2dup () : void [semidet]
-  (let ((b (ds_pop)))
-    (let ((a (ds_pop)))
-      (ds_push a) (ds_push b) (ds_push a) (ds_push b))))
+  (let ((b (ds_pop)) (a (ds_pop)))
+    (ds_push a) (ds_push b) (ds_push a) (ds_push b)))
 
 (def f_2drop () : void [semidet]
   (ds_pop) (ds_pop) (! NOOP 0))
@@ -136,14 +135,13 @@
 (def f_constant () : void [nondet]
   (tok_next)
   (save_name)
-  (let ((val (ds_pop)))
-    (let ((stub (@ HERE)))
-      (emit_cell ($op lit))
-      (emit_cell val)
-      (emit_cell ($op call))
-      (emit_cell (addr ds_push))
-      (emit_cell ($op ret))
-      (dict_add CNAME stub))))
+  (let ((val (ds_pop)) (stub (@ HERE)))
+    (emit_cell ($op lit))
+    (emit_cell val)
+    (emit_cell ($op call))
+    (emit_cell (addr ds_push))
+    (emit_cell ($op ret))
+    (dict_add CNAME stub)))
 
 ;; immediate compile-mode words, called directly, not via dictionary.
 ;; branches bridge to the native VM stack via CALL ds_pop before ZBRANCH.
@@ -161,10 +159,9 @@
 (def f_else () : void [semidet]
   (emit_cell ($op branch))
   (emit_cell 0)
-  (let ((new_patch (- (@ HERE) 2)))
-    (let ((old_patch (ds_pop)))
-      (! old_patch (@ HERE))
-      (ds_push new_patch))))
+  (let ((new_patch (- (@ HERE) 2)) (old_patch (ds_pop)))
+    (! old_patch (@ HERE))
+    (ds_push new_patch)))
 
 (def f_begin () : void [semidet]
   (ds_push (@ HERE)))
@@ -183,11 +180,10 @@
   (ds_push (- (@ HERE) 2)))
 
 (def f_repeat () : void [semidet]
-  (let ((patch (ds_pop)))
-    (let ((begin_addr (ds_pop)))
-      (emit_cell ($op branch))
-      (emit_cell begin_addr)
-      (! patch (@ HERE)))))
+  (let ((patch (ds_pop)) (begin_addr (ds_pop)))
+    (emit_cell ($op branch))
+    (emit_cell begin_addr)
+    (! patch (@ HERE))))
 
 (def f_again () : void [semidet]
   (emit_cell ($op branch))

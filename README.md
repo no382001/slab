@@ -79,28 +79,31 @@ symbol     = (any char except whitespace, parens, brackets, braces, '"', ';')+ ;
 
 top-level  = def | extern | const | directive ;
 def        = '(' 'def' symbol params ':' type effect? expr+ ')' ;
-extern     = '(' 'extern' symbol param-types ':' type ')' ;
+extern     = '(' 'extern' symbol param-types ':' type ')'
+           | '(' 'extern' symbol number param-types ':' type ')' ;
 const      = '(' 'const' symbol type expr ')' ;
 directive  = '(' '$include' string ')'
            | '(' '$section' number ')'
            | '(' '$alloc' symbol number ')' ;
 
 params     = '(' param* ')' ;
-param      = symbol | '(' symbol ':' type ')' ;
+param      = symbol | '(' symbol ':' type ')' | '(' symbol ':' type '...' ')' ;
 param-types = '(' type* ')' ;
-effect     = '[' 'det' ']' | '[' 'semidet' ']' | '[' 'nondet' ']' ;
+level      = 'det' | 'semidet' | 'nondet' ;
+effect     = '[' level ']' | '[' level 'inline' ']' | '[' 'inline' level ']' ;
 
 type       = 'int' | 'byte' | 'bool' | 'void' | '(' 'ptr' type ')' ;
 
 expr       = number | string | symbol
            | '(' 'if' expr expr expr ')'
            | '(' 'let' '(' binding* ')' expr+ ')'
+           | '(' 'local' '(' binding* ')' expr+ ')'
            | '(' 'do' expr+ ')'
            | '(' 'while' expr expr+ ')'
-           | '(' 'deref' expr ')'
-           | '(' 'deref8' expr ')'
-           | '(' 'store' expr expr ')'
-           | '(' 'store8' expr expr ')'
+           | '(' '@' expr ')'
+           | '(' 'c@' expr ')'
+           | '(' '!' expr expr ')'
+           | '(' 'c!' expr expr ')'
            | '(' 'addr' symbol ')'
            | '(' 'execute' expr ')'
            | '(' binop expr expr ')'
@@ -155,6 +158,7 @@ The hierarchy is a claim about the worst thing a function does. It propagates up
 | `emit` | `(int) : void` | write character to stdout |
 | `key` | `() : int` | read character from stdin |
 | `bye` | `() : void` | halt the VM |
+| `assert-fail` | `() : void` | halt the VM with exit code 1 (assertion/panic) |
 
 Inline VM opcodes can be emitted directly with `{...}`, bypassing the type system.
 
@@ -167,10 +171,14 @@ Directives are compile-time only — they emit no code.
 | `($include "file")` | splices `file` into the current program at this point, resolved relative to the including file's directory |
 | `($section addr)` | sets the static allocation cursor to `addr` |
 | `($alloc name size)` | binds `name` to the current cursor as an `int` constant, then advances the cursor by `size` bytes |
+| `($vm-sp)` / `($vm-rp)` / `($vm-ip)` | expand to the memory address of the VM's SP/RP/IP register (memory-mapped, see [memory model](#memory-model)) |
+| `($op name)` | expands to an opcode's numeric code (from `gen/gen.pl`), for use inside `{...}` inline asm |
 
 ### expressions
 
 **`(let ((x expr) ...) body...)`** — binds names to values for the duration of `body`. Each binding is stored at a statically-assigned memory address allocated per-function starting at `0x4000`. No allocation occurs at runtime; the addresses are fixed at compile time.
+
+**`(local ((x expr) ...) body...)`** — like `let`, but each binding is a statically-allocated memory cell (a fixed address, like `$alloc`) instead of a rack-scoped slot. Cheaper when a `let`'s rack lifecycle isn't needed, but the storage is shared across calls — not safe for recursive or re-entrant use.
 
 **`(addr name)`** — pushes the address of a named function as an integer, without calling it. Used to pass functions as values.
 
@@ -190,27 +198,27 @@ Directives are compile-time only — they emit no code.
 ($include "core.sets") ; definitions for `true` and `false`
 
 (def streq ((a : int) (b : int)) : bool
-  (store STRI 0)
-  (while (if (= (deref8 (+ a (deref STRI))) (deref8 (+ b (deref STRI))))
-             (!= (deref8 (+ a (deref STRI))) 0)
+  (! STRI 0)
+  (while (if (= (c@ (+ a (@ STRI))) (c@ (+ b (@ STRI))))
+             (!= (c@ (+ a (@ STRI))) 0)
              false)
-    (store STRI (+ (deref STRI) 1)))
-  (= (deref8 (+ a (deref STRI))) (deref8 (+ b (deref STRI)))))
+    (! STRI (+ (@ STRI) 1)))
+  (= (c@ (+ a (@ STRI))) (c@ (+ b (@ STRI)))))
 
 (def main () : void
   (while true
-    (store IDX 0)
-    (while (do (store CHAR (key))
-               (!= (deref CHAR) 10))
-      (store8 (+ BUF (deref IDX)) (deref CHAR))
-      (store IDX (+ (deref IDX) 1)))
-    (store8 (+ BUF (deref IDX)) 0)
+    (! IDX 0)
+    (while (do (! CHAR (key))
+               (!= (@ CHAR) 10))
+      (c! (+ BUF (@ IDX)) (@ CHAR))
+      (! IDX (+ (@ IDX) 1)))
+    (c! (+ BUF (@ IDX)) 0)
     (if (streq BUF "bye")
       (bye)
-      (do (store IDX 0)
-          (while (!= (deref8 (+ BUF (deref IDX))) 0)
-            (emit (deref8 (+ BUF (deref IDX))))
-            (store IDX (+ (deref IDX) 1)))
+      (do (! IDX 0)
+          (while (!= (c@ (+ BUF (@ IDX))) 0)
+            (emit (c@ (+ BUF (@ IDX))))
+            (! IDX (+ (@ IDX) 1)))
           (emit 10)))))
 ```
 
@@ -253,11 +261,15 @@ The compiler is a multi-pass Prolog program (`compiler/`):
 | stage | file | description |
 |-------|------|-------------|
 | parse | `parser.pl` | characters -> s-expression forms (DCG) |
+| meta-expansion | `compiler.pl` | expand `$include`/`$section`/`$alloc` directives and `$vm-*`/`$op` meta-constants into literals |
 | ast | `ast.pl` | forms -> typed AST nodes |
+| locals | `locals.pl` | expand `local` bindings into statically-allocated memory cells |
 | typecheck | `typecheck.pl` | monomorphic type synthesis + checking |
 | effects | `effects.pl` | fixed-point effect inference (det/semidet/nondet) |
 | dead code | `deadcode.pl` | warn on unreachable definitions |
+| inline | `inline.pl` | expand `[inline]`-annotated call sites |
 | const fold | `constfold.pl` | fold `det` calls with constant arguments |
+| cse | `cse.pl` | common subexpression elimination, if-branch merging, dead/single-use `let` elimination |
 | codegen | `codegen.pl` | AST -> VM token sequence |
 | emit | `emit.pl` | tokens -> binary bytecode |
 
@@ -300,7 +312,7 @@ Minimal threaded-style bytecode:
 | literals | `nop` `lit` |
 | memory | `@` `!` `c@` `c!` |
 | stack | `dup` `drop` `swap` `over` |
-| return stack | `>r` `r>` `r@` |
+| return stack | `>r` `r>` `r@` `rpick` |
 | alu | `+` `-` `*` `/` `mod` `and` `or` `xor` `=` `<` |
 | control | `branch` `zbranch` `call` `ret` `execute` |
 | system | `trap` |
