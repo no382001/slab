@@ -483,6 +483,19 @@ setup() {
   [[ "$result" == *"declared [det] but inferred nondet"* ]]
 }
 
+@test "effects annotation rejects: det function laundering a nondet function via addr+execute" {
+  # execute is unconditionally nondet, so this is caught even though addr itself is effect-free
+  result="$(compile '(def leaky () : void [nondet] (emit 65)) (def bad () : void [det] (execute (addr leaky)))' binary)"
+  [[ "$result" == *"declared [det] but inferred nondet"* ]]
+}
+
+@test "effects: addr of a nondet function stays det, only execute forces the effect" {
+  # the effect only bites at the execute call site, not at addr
+  result="$(compile '(def leaky () : void [nondet] (emit 65)) (def get_addr () : int [det] (addr leaky)) (def runner () : void [nondet] (execute (get_addr)))' effects)"
+  [[ "$result" == *"eff(get_addr,det)"* ]]
+  [[ "$result" == *"eff(runner,nondet)"* ]]
+}
+
 @test "effects annotation rejects: transitive nondet via call" {
   result="$(compile '(def io () : void (emit 65)) (def f () : void [det] (io))' binary)"
   [[ "$result" == *"declared [det] but inferred nondet"* ]]
