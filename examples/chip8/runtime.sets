@@ -1,0 +1,114 @@
+;; runtime.sets — init, timers, ROM loading, decoded-field accessors.
+;; Everything CHIP-8-instruction-agnostic; see ops.sets for the opcodes
+;; themselves, chip8.sets for c8_step (fetch/decode/dispatch) and main.
+
+;; ============================================================
+;; Arithmetic helpers
+;; ============================================================
+
+(def c8_mul ((a : int) (b : int)) : int [det]
+  (* a b))
+
+;; Returns quotient; remainder in C8_DR.
+(def c8_div ((a : int) (b : int)) : int [semidet]
+  (! C8_DR (mod a b))
+  (/ a b))
+
+;; ============================================================
+;; RNG
+;; ============================================================
+
+(def c8_rand () : int [nondet]
+  (! C8_SEED (and (+ (@ C8_SEED) (millis)) 32767))
+  (and (@ C8_SEED) 255))
+
+;; ============================================================
+;; Font init — ! 16 sprites (5 bytes each) into C8_MEM[0..79]
+;; ============================================================
+
+;; Writes one 5-byte glyph at C8_MEM[base..base+4]. Each row is a byte
+;; of the sprite as it appears on screen (bit 7 = leftmost pixel).
+(def c8_write_glyph ((base : int) (b0 : int) (b1 : int) (b2 : int) (b3 : int) (b4 : int)) : void [semidet]
+  (c! (+ C8_MEM base) b0)
+  (c! (+ C8_MEM (+ base 1)) b1)
+  (c! (+ C8_MEM (+ base 2)) b2)
+  (c! (+ C8_MEM (+ base 3)) b3)
+  (c! (+ C8_MEM (+ base 4)) b4))
+
+(def c8_load_font () : void [semidet]
+  (c8_write_glyph  0 240 144 144 144 240)  ; 0: F0 90 90 90 F0
+  (c8_write_glyph  5  32  96  32  32 112)  ; 1: 20 60 20 20 70
+  (c8_write_glyph 10 240  16 240 128 240)  ; 2: F0 10 F0 80 F0
+  (c8_write_glyph 15 240  16 240  16 240)  ; 3: F0 10 F0 10 F0
+  (c8_write_glyph 20 144 144 240  16  16)  ; 4: 90 90 F0 10 10
+  (c8_write_glyph 25 240 128 240  16 240)  ; 5: F0 80 F0 10 F0
+  (c8_write_glyph 30 240 128 240 144 240)  ; 6: F0 80 F0 90 F0
+  (c8_write_glyph 35 240  16  32  64  64)  ; 7: F0 10 20 40 40
+  (c8_write_glyph 40 240 144 240 144 240)  ; 8: F0 90 F0 90 F0
+  (c8_write_glyph 45 240 144 240  16 240)  ; 9: F0 90 F0 10 F0
+  (c8_write_glyph 50 240 144 240 144 144)  ; A: F0 90 F0 90 90
+  (c8_write_glyph 55 224 144 224 144 224)  ; B: E0 90 E0 90 E0
+  (c8_write_glyph 60 240 128 128 128 240)  ; C: F0 80 80 80 F0
+  (c8_write_glyph 65 224 144 144 144 224)  ; D: E0 90 90 90 E0
+  (c8_write_glyph 70 240 128 240 128 240)  ; E: F0 80 F0 80 F0
+  (c8_write_glyph 75 240 128 240 128 128)) ; F: F0 80 F0 80 80
+
+;; ============================================================
+;; State init
+;; ============================================================
+
+;; Zeroes Count bytes starting at Base.
+(def c8_clear ((base : int) (count : int)) : void [semidet]
+  (local ((i 0))
+    (while (< (@ i) count)
+      (c! (+ base (@ i)) 0)
+      (! i (+ (@ i) 1)))))
+
+(def c8_init () : void [nondet]
+  (c8_load_font)
+  (! C8_PC 512)
+  (! C8_I 0)
+  (! C8_SP 0)
+  (! C8_DT 0)
+  (! C8_ST 0)
+  (! C8_SEED 12345)
+  (! C8_LTICK (millis))
+  (c8_clear C8_V 16)
+  (c8_clear C8_FB 2048))
+
+;; ============================================================
+;; ROM loader — reads bytes from stdin until EOF
+;; ============================================================
+
+(def c8_load_rom () : void [nondet]
+  (! C8_RLEN 0)
+  (local ((byte (key)))
+    (while (!= (@ byte) -1)
+      (c! (+ C8_MEM (+ 512 (@ C8_RLEN))) (@ byte))
+      (! C8_RLEN (+ (@ C8_RLEN) 1))
+      (! byte (key)))))
+
+;; ============================================================
+;; Timer — decrement DT at ~60Hz
+;; ============================================================
+
+(def c8_tick_timer () : void [nondet]
+  (let ((now (millis)) (elapsed (- now (@ C8_LTICK))))
+    (if (< 16 elapsed)
+      (do (if (< 0 (@ C8_DT))
+            (! C8_DT (- (@ C8_DT) 1))
+            (! C8_ITER 0))
+          (if (< 0 (@ C8_ST))
+            (do (! C8_ST (- (@ C8_ST) 1))
+                (if (< 0 (@ C8_ST)) (sound 1) (sound 0)))
+            (sound 0))
+          (! C8_LTICK now))
+      (! C8_ITER 0))))
+
+;; ============================================================
+;; Opcode helpers — read current decoded fields from globals
+;; ============================================================
+
+(def c8_vx () : int [semidet]   (c@ (+ C8_V (@ C8_X))))
+(def c8_vy () : int [semidet]   (c@ (+ C8_V (@ C8_Y))))
+(def c8_vf_addr () : int [semidet] (+ C8_V 15))

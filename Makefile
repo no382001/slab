@@ -107,7 +107,7 @@ bats: $(TARGET) $(GEN_DIR)/gen.pl
 programs/%.bin: programs/%.sets $(GEN_DIR)/gen.pl
 	@cd compiler && scryer-prolog -f -g "use_module(compiler), compile_file('../$<', '../$@'), halt." < /dev/null
 
-examples/chip8/chip8.bin: examples/chip8/chip8.sets $(GEN_DIR)/gen.pl
+examples/chip8/chip8.bin: examples/chip8/chip8.sets examples/chip8/runtime.sets examples/chip8/ops.sets $(GEN_DIR)/gen.pl
 	@cd compiler && scryer-prolog -f compiler.pl -g "compile_file('../examples/chip8/chip8.sets', '../examples/chip8/chip8.bin'), halt." < /dev/null
 
 examples/forth/forth.bin: examples/forth/forth.sets examples/forth/reader.sets examples/forth/primitives.sets examples/forth/compile.sets $(GEN_DIR)/gen.pl

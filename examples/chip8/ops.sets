@@ -1,0 +1,257 @@
+;; ops.sets
+
+;; ============================================================
+;; 0x0: 00E0 clear screen / 00EE return
+;; ============================================================
+
+(def c8_op_0 () : void [semidet]
+  (if (= (@ C8_NN) OP0_CLS)
+    (c8_clear C8_FB 2048)
+    (if (= (@ C8_NN) OP0_RET)
+      (do (! C8_SP (- (@ C8_SP) 1))
+          (! C8_PC (@ (+ C8_STACK (c8_mul (@ C8_SP) 2)))))
+      (! C8_ITER 0))))
+
+;; ============================================================
+;; 0x1: 1NNN jump to NNN
+;; ============================================================
+
+(def c8_op_1 () : void [semidet]
+  (! C8_PC (@ C8_NNN)))
+
+;; ============================================================
+;; 0x2: 2NNN call subroutine
+;; ============================================================
+
+(def c8_op_2 () : void [semidet]
+  (! (+ C8_STACK (c8_mul (@ C8_SP) 2)) (@ C8_PC))
+  (! C8_SP (+ (@ C8_SP) 1))
+  (! C8_PC (@ C8_NNN)))
+
+;; ============================================================
+;; 0x3: 3XNN skip if Vx == NN
+;; ============================================================
+
+(def c8_op_3 () : void [semidet]
+  (if (= (c8_vx) (@ C8_NN))
+    (! C8_PC (+ (@ C8_PC) 2))
+    (! C8_ITER 0)))
+
+;; ============================================================
+;; 0x4: 4XNN skip if Vx != NN
+;; ============================================================
+
+(def c8_op_4 () : void [semidet]
+  (if (!= (c8_vx) (@ C8_NN))
+    (! C8_PC (+ (@ C8_PC) 2))
+    (! C8_ITER 0)))
+
+;; ============================================================
+;; 0x5: 5XY0 skip if Vx == Vy
+;; ============================================================
+
+(def c8_op_5 () : void [semidet]
+  (if (= (c8_vx) (c8_vy))
+    (! C8_PC (+ (@ C8_PC) 2))
+    (! C8_ITER 0)))
+
+;; ============================================================
+;; 0x6: 6XNN set Vx = NN
+;; ============================================================
+
+(def c8_op_6 () : void [semidet]
+  (c! (+ C8_V (@ C8_X)) (@ C8_NN)))
+
+;; ============================================================
+;; 0x7: 7XNN add NN to Vx (no carry)
+;; ============================================================
+
+(def c8_op_7 () : void [semidet]
+  (c! (+ C8_V (@ C8_X))
+    (and (+ (c8_vx) (@ C8_NN)) 255)))
+
+;; ============================================================
+;; 0x8: arithmetic / logic
+;; ============================================================
+
+;; 8XY0: Vx = Vy
+(def c8_op_8_ld ((vy : int)) : void [semidet]
+  (c! (+ C8_V (@ C8_X)) vy))
+
+;; 8XY1: Vx |= Vy (reset VF quirk: skip for now)
+(def c8_op_8_or ((vx : int) (vy : int)) : void [semidet]
+  (c! (+ C8_V (@ C8_X)) (or vx vy)))
+
+;; 8XY2: Vx &= Vy
+(def c8_op_8_and ((vx : int) (vy : int)) : void [semidet]
+  (c! (+ C8_V (@ C8_X)) (and vx vy)))
+
+;; 8XY3: Vx ^= Vy
+(def c8_op_8_xor ((vx : int) (vy : int)) : void [semidet]
+  (c! (+ C8_V (@ C8_X)) (xor vx vy)))
+
+;; 8XY4: Vx += Vy, VF = carry
+(def c8_op_8_add ((vx : int) (vy : int)) : void [semidet]
+  (let ((res (+ vx vy)))
+    (c! (+ C8_V (@ C8_X)) (and res 255))
+    (c! (c8_vf_addr) (if (< 255 res) 1 0))))
+
+;; 8XY5: Vx -= Vy, VF = 1 if no borrow
+(def c8_op_8_sub ((vx : int) (vy : int)) : void [semidet]
+  (do (c! (c8_vf_addr) (if (< vx vy) 0 1))
+      (c! (+ C8_V (@ C8_X)) (and (- vx vy) 255))))
+
+;; 8XY6: Vx >>= 1, VF = old LSB
+(def c8_op_8_shr ((vx : int)) : void [semidet]
+  (do (c! (c8_vf_addr) (and vx 1))
+      (c! (+ C8_V (@ C8_X)) (c8_div vx 2))))
+
+;; 8XY7: Vx = Vy - Vx, VF = 1 if no borrow
+(def c8_op_8_subn ((vx : int) (vy : int)) : void [semidet]
+  (do (c! (c8_vf_addr) (if (< vy vx) 0 1))
+      (c! (+ C8_V (@ C8_X)) (and (- vy vx) 255))))
+
+;; 8XYE: Vx <<= 1, VF = old MSB
+(def c8_op_8_shl ((vx : int)) : void [semidet]
+  (do (c! (c8_vf_addr) (c8_div (and vx 128) 128))
+      (c! (+ C8_V (@ C8_X)) (and (c8_mul vx 2) 255))))
+
+(def c8_op_8 () : void [semidet]
+  (let ((vx (c8_vx)) (vy (c8_vy)))
+    (case (@ C8_N)
+      (OP8_LD   (c8_op_8_ld vy))
+      (OP8_OR   (c8_op_8_or vx vy))
+      (OP8_AND  (c8_op_8_and vx vy))
+      (OP8_XOR  (c8_op_8_xor vx vy))
+      (OP8_ADD  (c8_op_8_add vx vy))
+      (OP8_SUB  (c8_op_8_sub vx vy))
+      (OP8_SHR  (c8_op_8_shr vx))
+      (OP8_SUBN (c8_op_8_subn vx vy))
+      (OP8_SHL  (c8_op_8_shl vx))
+      (else (! C8_ITER 0)))))
+
+;; ============================================================
+;; 0x9: 9XY0 skip if Vx != Vy
+;; ============================================================
+
+(def c8_op_9 () : void [semidet]
+  (if (!= (c8_vx) (c8_vy))
+    (! C8_PC (+ (@ C8_PC) 2))
+    (! C8_ITER 0)))
+
+;; ============================================================
+;; 0xA: ANNN set I = NNN
+;; ============================================================
+
+(def c8_op_A () : void [semidet]
+  (! C8_I (@ C8_NNN)))
+
+;; ============================================================
+;; 0xB: BNNN jump to V0 + NNN
+;; ============================================================
+
+(def c8_op_B () : void [semidet]
+  (! C8_PC (+ (c@ C8_V) (@ C8_NNN))))
+
+;; ============================================================
+;; 0xC: CXNN Vx = rand & NN
+;; ============================================================
+
+(def c8_op_C () : void [nondet]
+  (c! (+ C8_V (@ C8_X)) (and (c8_rand) (@ C8_NN))))
+
+;; ============================================================
+;; 0xD: DXYN draw sprite
+;; ============================================================
+
+(def c8_op_D () : void [semidet]
+  (let ((sx (and (c8_vx) 63))
+        (sy (and (c8_vy) 31)))
+    (c! (c8_vf_addr) 0)
+    (! C8_ROW 0)
+    (while (< (@ C8_ROW) (@ C8_N))
+      (! C8_PIX (c@ (+ C8_MEM (+ (@ C8_I) (@ C8_ROW)))))
+      (! C8_MASK 128)
+      (! C8_COL 0)
+      (while (< (@ C8_COL) 8)
+        (if (!= 0 (and (@ C8_PIX) (@ C8_MASK)))
+          (let ((dx (and (+ sx (@ C8_COL)) 63))
+                (dy (and (+ sy (@ C8_ROW)) 31)))
+            (! C8_DIDX (+ (c8_mul dy 64) dx))
+            (if (!= 0 (c@ (+ C8_FB (@ C8_DIDX))))
+              (do (c! (c8_vf_addr) 1)
+                  (c! (+ C8_FB (@ C8_DIDX)) 0))
+              (c! (+ C8_FB (@ C8_DIDX)) 1)))
+          (! C8_ITER 0))
+        (! C8_MASK (c8_div (@ C8_MASK) 2))
+        (! C8_COL (+ (@ C8_COL) 1)))
+      (! C8_ROW (+ (@ C8_ROW) 1)))))
+
+;; ============================================================
+;; 0xE: keypad skip
+;; ============================================================
+
+(def c8_op_E () : void [nondet]
+  (if (= (@ C8_NN) KEY_EX9E)
+    ;; EX9E: skip if key Vx pressed
+    (if (key-is-down (c8_vx))
+      (! C8_PC (+ (@ C8_PC) 2))
+      (! C8_ITER 0))
+    (if (= (@ C8_NN) KEY_EXA1)
+      ;; EXA1: skip if key Vx NOT pressed
+      (if (key-is-down (c8_vx))
+        (! C8_ITER 0)
+        (! C8_PC (+ (@ C8_PC) 2)))
+      (! C8_ITER 0))))
+
+;; ============================================================
+;; 0xF: timers, BCD, memory, key wait
+;; ============================================================
+
+(def c8_op_F () : void [nondet]
+  (let ((vx (c8_vx)))
+    (case (@ C8_NN)
+      ;; FX07: Vx = DT
+      (FX_LD_VX_DT (c! (+ C8_V (@ C8_X)) (@ C8_DT)))
+      ;; FX0A: wait for any key, ! in Vx
+      (FX_LD_VX_KEY
+        (do (! C8_PIX -1)
+            (while (= (@ C8_PIX) -1)
+              (fb-refresh C8_FB)
+              (! C8_ITER 0)
+              (while (< (@ C8_ITER) 16)
+                (if (key-is-down (@ C8_ITER))
+                  (do (! C8_PIX (@ C8_ITER))
+                      (! C8_ITER 16))
+                  (! C8_ITER (+ (@ C8_ITER) 1)))))
+            (c! (+ C8_V (@ C8_X)) (@ C8_PIX))))
+      ;; FX15: DT = Vx
+      (FX_LD_DT_VX (! C8_DT vx))
+      ;; FX18: ST = Vx
+      (FX_LD_ST_VX (! C8_ST vx))
+      ;; FX1E: I += Vx
+      (FX_ADD_I_VX (! C8_I (+ (@ C8_I) vx)))
+      ;; FX29: I = address of sprite for hex digit Vx
+      (FX_LD_F_VX (! C8_I (c8_mul vx 5)))
+      ;; FX33: BCD of Vx at I, I+1, I+2
+      (FX_LD_B_VX
+        (let ((h (c8_div vx 100)))
+          (c! (+ C8_MEM (@ C8_I)) h)
+          (let ((t (c8_div (@ C8_DR) 10)))
+            (c! (+ C8_MEM (+ (@ C8_I) 1)) t)
+            (c! (+ C8_MEM (+ (@ C8_I) 2)) (@ C8_DR)))))
+      ;; FX55: ! V0..Vx at memory[I..]
+      (FX_LD_I_VX
+        (do (! C8_ITER 0)
+            (while (< (@ C8_ITER) (+ (@ C8_X) 1))
+              (c! (+ C8_MEM (+ (@ C8_I) (@ C8_ITER)))
+                      (c@ (+ C8_V (@ C8_ITER))))
+              (! C8_ITER (+ (@ C8_ITER) 1)))))
+      ;; FX65: load V0..Vx from memory[I..]
+      (FX_LD_VX_I
+        (do (! C8_ITER 0)
+            (while (< (@ C8_ITER) (+ (@ C8_X) 1))
+              (c! (+ C8_V (@ C8_ITER))
+                      (c@ (+ C8_MEM (+ (@ C8_I) (@ C8_ITER)))))
+              (! C8_ITER (+ (@ C8_ITER) 1)))))
+      (else (! C8_ITER 0)))))
