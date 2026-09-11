@@ -563,6 +563,31 @@ setup() {
 }
 
 # ============================================================
+# large det sub-expression warnings (auto-decomposition, warn-only)
+# ============================================================
+
+@test "decomp: warns on a large det sub-expression inside a nondet function" {
+  warnings="$(compile_warnings '(def f () : void (emit (+ (+ (+ (+ 1 2) 3) 4) (+ (+ 5 6) (+ 7 8)))))')"
+  [[ "$warnings" == *"large det sub-expression"* ]]
+}
+
+@test "decomp: no warning for a small det sub-expression" {
+  warnings="$(compile_warnings '(def f () : void (emit (+ 1 2)))')"
+  [[ "$warnings" != *"large det sub-expression"* ]]
+}
+
+@test "decomp: no warning for a fully det function, however large" {
+  warnings="$(compile_warnings '(def f () : int (+ (+ (+ (+ 1 2) 3) 4) (+ (+ 5 6) (+ 7 8))))')"
+  [[ "$warnings" != *"large det sub-expression"* ]]
+}
+
+@test "decomp: finds a large det region nested inside a while loop" {
+  # cse.pl itself never crosses a while's scope boundary; decomp's search does
+  warnings="$(compile_warnings '(def f ((a : int)) : void (while (!= a 0) (emit (+ (+ (+ a 1) 2) (+ (+ a 3) (+ a 4))))))')"
+  [[ "$warnings" == *"large det sub-expression"* ]]
+}
+
+# ============================================================
 # constant folding
 # ============================================================
 

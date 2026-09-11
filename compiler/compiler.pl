@@ -11,6 +11,7 @@
 :- use_module(deadcode).
 :- use_module(constfold).
 :- use_module(cse).
+:- use_module(decomp).
 :- use_module(inline).
 :- use_module(locals).
 :- use_module(diagnostics).
@@ -117,6 +118,9 @@ compile_from_forms(Forms, Target, DefLines, SlotBase, Result) :-
                 %% Stage 3.6b: effect annotation warnings (non-fatal, to stderr)
                 effects:collect_effect_warnings(TypedDefs, EffectEnv, EffWarnings),
                 diagnostics:warn_effects(EffWarnings),
+                %% Stage 3.6c: large det sub-expression warnings (non-fatal, to stderr)
+                decomp:collect_decomp_warnings(TypedDefs, EffectEnv, DecompWarnings),
+                diagnostics:warn_decomp(DecompWarnings, DefLines),
                 %% Stage 3.65: expand [inline] call sites
                 inline:inline_warnings(TypedDefs, InlineWarnings),
                 diagnostics:warn_inline(InlineWarnings),

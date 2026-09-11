@@ -3,6 +3,7 @@
     warn_effects/1,
     warn_dead_code/1,
     warn_inline/1,
+    warn_decomp/2,
     format_typecheck_errors/2,
     format_effect_errors/1,
     format_paren_error/1
@@ -79,6 +80,22 @@ warn_inline_reason(Name, Reason) :-
     phrase((seq(WarnTag), " '", seq(BoldName), "' declared [inline] but ",
             seq(Reason), ", ignoring hint\n"), Msg),
     write_stderr(Msg).
+
+%% large det sub-expression warnings to stderr
+warn_decomp([], _).
+warn_decomp([decomp(Name, Cost)|Rest], DefLines) :-
+    atom_chars(Name, NameChars),
+    number_chars(Cost, CostChars),
+    ( member(Name-Loc, DefLines) -> true ; Loc = unknown ),
+    format_loc(Loc, LocCs),
+    ansi(bold, LocCs, BoldLoc),
+    ansi(yellow, "warning:", WarnTag),
+    ansi(bold, NameChars, BoldName),
+    phrase((seq(BoldLoc), seq(WarnTag), " '", seq(BoldName),
+            "' contains a large det sub-expression (~", seq(CostChars),
+            " bytes) that could be extracted into its own function\n"), Msg),
+    write_stderr(Msg),
+    warn_decomp(Rest, DefLines).
 
 kind_label(func,   "function").
 kind_label(const,  "const").

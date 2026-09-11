@@ -1,4 +1,4 @@
-:- module(cse, [cse_defs/3, cse_stats/1]).
+:- module(cse, [cse_defs/3, cse_stats/1, estimate_cost/2]).
 
 :- use_module(library(lists)).
 :- use_module(library(dcgs)).

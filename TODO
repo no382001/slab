@@ -9,7 +9,6 @@ errors / warnings:
 - string literals pushing code region into the $section range
 - deref on a non-ptr type
 - if branches with mismatched types
-- [det] function laundering effects via addr+execute of a [nondet] function
 
 optimizations:
 - auto-decomposition: identify det sub-regions inside nondet/semidet functions, extract them into separate det functions with their free variables as explicit parameters; or at minimum warn that a large det sub-expression exists and could be extracted
@@ -22,3 +21,17 @@ refine the readme and add 2 gifs of running
 
 binding-time analysis
 Partial Evaluation and Automatic Program Generation Carsten Gomard 1993
+
+
+mainly stemming from my confusion of how things work.
+
+s expression based systems language compiler for a forth vm, built for simplicity
+just enough to bootstrap some environment into the vm, to which you can hand control to freely modify itself (if it wants to), everything is in memory, snapshottable
+
+if you ever need more memory to spill to you can just
+
+bc its applied left to right we end up with void functions like this (let (add (ds_pop))  (somethin ds_pop))
+
+you get both the parentheses and the atomicity of forth
+
+write about the deterministic grap reduction? maybe wire dot into the ast and print one before and after reduction
