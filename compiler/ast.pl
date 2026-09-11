@@ -1,6 +1,7 @@
 :- module(ast, [transform/2, transform_program/2]).
 
 :- use_module(library(lists)).
+:- use_module(library(dcgs)).
 :- use_module(builder).
 :- use_module(effects).
 
@@ -64,6 +65,15 @@ transform(list([sym(if), Cond, Then, Else]),
     transform(Then, ThenE),
     transform(Else, ElseE),
     builder:mk_if(CondE, ThenE, ElseE, Result).
+
+%% (case scrutinee (val expr) ... (else expr)) — see case_clauses_to_if below
+transform(list([sym(case), Scrutinee | Clauses]), Result) :-
+    Clauses = [_|_],
+    transform(Scrutinee, TScrutinee),
+    fresh_case_name(Tmp),
+    case_clauses_to_if(Clauses, Tmp, Chain),
+    builder:mk_bind(Tmp, TScrutinee, Bind),
+    builder:mk_let([Bind], [Chain], Result).
 
 %% (let ((name expr) ...) body...)
 transform(list([sym(let), list(Bindings) | BodyForms]),
@@ -144,6 +154,28 @@ transform(list([sym(Name) | Args]), Result) :-
 %% helpers
 %% ============================================================
 
+case_clauses_to_if([list([sym(else), ElseForm])], _, Result) :- !,
+    transform(ElseForm, Result).
+case_clauses_to_if([list([ValForm, BodyForm])|Rest], Tmp, Result) :-
+    Rest \= [],
+    transform(ValForm, TVal),
+    transform(BodyForm, TBody),
+    builder:mk_var(Tmp, TmpVar),
+    builder:mk_binop(=, TmpVar, TVal, Cond),
+    case_clauses_to_if(Rest, Tmp, RestChain),
+    builder:mk_if(Cond, TBody, RestChain, Result).
+
+:- dynamic(case_counter/1).
+case_counter(0).
+
+fresh_case_name(Fresh) :-
+    retract(case_counter(N)),
+    N1 is N + 1,
+    assertz(case_counter(N1)),
+    number_chars(N1, NChars),
+    phrase((['_', c, a, s, e, '_'], seq(NChars)), FreshChars),
+    atom_chars(Fresh, FreshChars).
+
 transform_param(sym(Name), Result) :- builder:mk_param(Name, int, Result).  % default type for now
 transform_param(list([sym(Name), sym(:), TypeSym]), Result) :-
     transform_type(TypeSym, Type),
@@ -190,7 +222,7 @@ binop(and). binop(or). binop(xor).
 binop(=). binop(<). binop(>).
 binop('!='). binop(<=). binop(>=).
 
-reserved(def). reserved(let). reserved(local). reserved(if). reserved(do).
+reserved(def). reserved(let). reserved(local). reserved(if). reserved(do). reserved(case).
 reserved(while). reserved(const). reserved(extern).
 reserved(@). reserved('c@'). reserved(!). reserved('c!').
 reserved(addr). reserved(execute).

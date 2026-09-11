@@ -96,6 +96,7 @@ type       = 'int' | 'byte' | 'bool' | 'void' | '(' 'ptr' type ')' ;
 
 expr       = number | string | symbol
            | '(' 'if' expr expr expr ')'
+           | '(' 'case' expr case-clause+ else-clause ')'
            | '(' 'let' '(' binding* ')' expr+ ')'
            | '(' 'local' '(' binding* ')' expr+ ')'
            | '(' 'do' expr+ ')'
@@ -111,6 +112,8 @@ expr       = number | string | symbol
            | '{' symbol* '}' ;
 
 binding    = '(' symbol expr ')' ;
+case-clause = '(' expr expr ')' ;
+else-clause = '(' 'else' expr ')' ;
 binop      = '+' | '-' | '*' | '/' | 'mod' | '=' | '<' | '>' | '!=' | '<=' | '>=' | 'and' | 'or' | 'xor' ;
 ```
 
@@ -175,6 +178,8 @@ Directives are compile-time only — they emit no code.
 | `($op name)` | expands to an opcode's numeric code (from `gen/gen.pl`), for use inside `{...}` inline asm |
 
 ### expressions
+
+**`(case scrutinee (val expr) ... (else expr))`** — compares `scrutinee` against each `val` in turn and evaluates the matching branch, falling back to `else` if none match. `scrutinee` is evaluated exactly once regardless of clause count. Pure sugar: desugars at parse time into a `let` binding the scrutinee once and a chain of `if`/`=` comparisons, so it costs nothing beyond what the equivalent hand-written `if` chain would.
 
 **`(let ((x expr) ...) body...)`** — binds names to values for the duration of `body`. Each binding is stored at a statically-assigned memory address allocated per-function starting at `0x4000`. No allocation occurs at runtime; the addresses are fixed at compile time.
 

@@ -181,6 +181,28 @@ setup() {
   [ "$output" = "A" ]
 }
 
+@test "e2e: case dispatches to the matching clause" {
+  run run_program '(def f ((x : int)) : void (case x (0 (emit 65)) (1 (emit 66)) (2 (emit 67)) (else (emit 90)))) (def main () : void (f 1) (bye))'
+  [ "$output" = "B" ]
+}
+
+@test "e2e: case falls back to else when nothing matches" {
+  run run_program '(def f ((x : int)) : void (case x (0 (emit 65)) (1 (emit 66)) (else (emit 90)))) (def main () : void (f 99) (bye))'
+  [ "$output" = "Z" ]
+}
+
+@test "e2e: case clause values can be consts, not just literals" {
+  run run_program '(const A int 10) (const B int 20) (def f ((x : int)) : void (case x (A (emit 65)) (B (emit 66)) (else (emit 90)))) (def main () : void (f 20) (bye))'
+  [ "$output" = "B" ]
+}
+
+@test "e2e: case evaluates the scrutinee exactly once" {
+  # if the scrutinee were re-evaluated per clause, its side effect (emit 88)
+  # would fire more than once
+  run run_program '(def get () : int [nondet] (emit 88) 5) (def main () : void (case (get) (5 (emit 89)) (else (emit 90))) (bye))'
+  [ "$output" = "XY" ]
+}
+
 @test "e2e: let binding" {
   run run_program '(def main () : void (let ((x 65)) (emit x)) (bye))'
   [ "$output" = "A" ]
