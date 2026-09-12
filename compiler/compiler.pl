@@ -9,6 +9,7 @@
 :- use_module(emit).
 :- use_module(effects).
 :- use_module(deadcode).
+:- use_module(canon).
 :- use_module(constfold).
 :- use_module(cse).
 :- use_module(decomp).
@@ -125,8 +126,10 @@ compile_from_forms(Forms, Target, DefLines, SlotBase, Result) :-
                 inline:inline_warnings(TypedDefs, InlineWarnings),
                 diagnostics:warn_inline(InlineWarnings),
                 inline:inline_calls(TypedDefs, InlinedDefs),
+                %% Stage 3.68: canonicalize associative-commutative chains
+                canon:canon_defs(InlinedDefs, EffectEnv, CanonDefs),
                 %% Stage 3.7: constant folding for det functions
-                constfold:fold_constants(InlinedDefs, EffectEnv, FoldedDefs),
+                constfold:fold_constants(CanonDefs, EffectEnv, FoldedDefs),
                 %% Stage 3.75: common subexpression elimination
                 cse:cse_defs(FoldedDefs, EffectEnv, CsedDefs),
                 codegen:compile_program(CsedDefs, SlotBase1, CgResult),
