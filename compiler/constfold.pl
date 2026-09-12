@@ -71,6 +71,7 @@ fold_expr(_, num(N), num(N)).
 fold_expr(_, str(S), str(S)).
 fold_expr(_, var(V), var(V)).
 fold_expr(_, addr(N), addr(N)).
+fold_expr(_, inline(Ops), inline(Ops)).
 
 fold_expr(DetFns, binop(Op, A, B), Result) :-
     fold_expr(DetFns, A, FA),
