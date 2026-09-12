@@ -5,6 +5,7 @@
 :- use_module(builder).
 :- use_module(effects).
 :- use_module(constfold).
+:- use_module(ast_shape).
 
 %% ============================================================
 %% stats
@@ -76,26 +77,6 @@ hoist_all(List0, EffectEnv, BindingsAcc, BindingsRev, List) :-
 %% cse_walk_expr: recurses into scopes collect_candidates skips (if/while/let/do) for their own dedup pass
 %% ============================================================
 
-cse_walk_expr(_, num(N), num(N)) :- !.
-cse_walk_expr(_, str(S), str(S)) :- !.
-cse_walk_expr(_, var(V), var(V)) :- !.
-cse_walk_expr(_, addr(N), addr(N)) :- !.
-cse_walk_expr(_, inline(Ops), inline(Ops)) :- !.
-cse_walk_expr(EffectEnv, binop(Op, A, B), binop(Op, NA, NB)) :- !,
-    cse_walk_expr(EffectEnv, A, NA),
-    cse_walk_expr(EffectEnv, B, NB).
-cse_walk_expr(EffectEnv, call(Name, Args), call(Name, NArgs)) :- !,
-    maplist(cse_walk_expr(EffectEnv), Args, NArgs).
-cse_walk_expr(EffectEnv, @(E), @(NE)) :- !, cse_walk_expr(EffectEnv, E, NE).
-cse_walk_expr(EffectEnv, 'c@'(E), 'c@'(NE)) :- !, cse_walk_expr(EffectEnv, E, NE).
-cse_walk_expr(EffectEnv, !(A, V), !(NA, NV)) :- !,
-    cse_walk_expr(EffectEnv, A, NA),
-    cse_walk_expr(EffectEnv, V, NV).
-cse_walk_expr(EffectEnv, 'c!'(A, V), 'c!'(NA, NV)) :- !,
-    cse_walk_expr(EffectEnv, A, NA),
-    cse_walk_expr(EffectEnv, V, NV).
-cse_walk_expr(EffectEnv, execute(E), execute(NE)) :- !, cse_walk_expr(EffectEnv, E, NE).
-
 cse_walk_expr(EffectEnv, if(C, Th, El), Result) :- !,
     cse_scope([C], EffectEnv, [NC]),
     cse_scope([Th], EffectEnv, [NTh]),
@@ -116,6 +97,12 @@ cse_walk_expr(EffectEnv, let(Bs, B), Result) :- !,
     simplify_let(NBs, NB, EffectEnv, Result).
 cse_walk_expr(EffectEnv, do(Es), do(NEs)) :- !,
     cse_scope(Es, EffectEnv, NEs).
+
+%% everything else: plain structural recursion, no scope of its own
+cse_walk_expr(EffectEnv, Expr, NewExpr) :-
+    ast_children(Expr, Children),
+    maplist(cse_walk_expr(EffectEnv), Children, NewChildren),
+    ast_rebuild(Expr, NewChildren, NewExpr).
 
 %% ============================================================
 %% simplify_let: drops dead [det] bindings, inlines single-use ones (cheaper than the rack); semidet/nondet bindings are never touched, since moving them could reorder effects
@@ -312,30 +299,16 @@ replace_in_scope([E|Es], T, Repl, [NE|NEs]) :-
     replace_in_scope(Es, T, Repl, NEs).
 
 replace_in_expr(E, T, Repl, Repl) :- E == T, !.
-replace_in_expr(num(N), _, _, num(N)) :- !.
-replace_in_expr(str(S), _, _, str(S)) :- !.
-replace_in_expr(var(V), _, _, var(V)) :- !.
-replace_in_expr(addr(N), _, _, addr(N)) :- !.
-replace_in_expr(inline(Ops), _, _, inline(Ops)) :- !.
-replace_in_expr(binop(Op, A, B), T, Repl, binop(Op, NA, NB)) :- !,
-    replace_in_expr(A, T, Repl, NA),
-    replace_in_expr(B, T, Repl, NB).
-replace_in_expr(call(Name, Args), T, Repl, call(Name, NArgs)) :- !,
-    replace_in_scope(Args, T, Repl, NArgs).
-replace_in_expr(@(E), T, Repl, @(NE)) :- !, replace_in_expr(E, T, Repl, NE).
-replace_in_expr('c@'(E), T, Repl, 'c@'(NE)) :- !, replace_in_expr(E, T, Repl, NE).
-replace_in_expr(!(A, V), T, Repl, !(NA, NV)) :- !,
-    replace_in_expr(A, T, Repl, NA),
-    replace_in_expr(V, T, Repl, NV).
-replace_in_expr('c!'(A, V), T, Repl, 'c!'(NA, NV)) :- !,
-    replace_in_expr(A, T, Repl, NA),
-    replace_in_expr(V, T, Repl, NV).
-replace_in_expr(execute(E), T, Repl, execute(NE)) :- !, replace_in_expr(E, T, Repl, NE).
 %% scope boundaries never contain a literal top-level occurrence of T (collect_candidates never reaches inside them) — left untouched
 replace_in_expr(if(C, Th, El), _, _, if(C, Th, El)) :- !.
 replace_in_expr(while(C, B), _, _, while(C, B)) :- !.
 replace_in_expr(let(Bs, B), _, _, let(Bs, B)) :- !.
 replace_in_expr(do(Es), _, _, do(Es)) :- !.
+%% everything else: recurse structurally, looking for T among the children
+replace_in_expr(Expr, T, Repl, NewExpr) :-
+    ast_children(Expr, Children),
+    replace_in_scope(Children, T, Repl, NewChildren),
+    ast_rebuild(Expr, NewChildren, NewExpr).
 
 %% ============================================================
 %% fresh names for hoisted bindings

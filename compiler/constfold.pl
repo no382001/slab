@@ -2,6 +2,7 @@
 
 :- use_module(library(lists)).
 :- use_module(builder).
+:- use_module(ast_shape).
 
 %% ============================================================
 %% fold statistics
@@ -67,13 +68,7 @@ fold_def(DetFns, def(Name, Params, RetType, Decl, Body), def(Name, Params, RetTy
 %% fold expressions
 %% ============================================================
 
-fold_expr(_, num(N), num(N)).
-fold_expr(_, str(S), str(S)).
-fold_expr(_, var(V), var(V)).
-fold_expr(_, addr(N), addr(N)).
-fold_expr(_, inline(Ops), inline(Ops)).
-
-fold_expr(DetFns, binop(Op, A, B), Result) :-
+fold_expr(DetFns, binop(Op, A, B), Result) :- !,
     fold_expr(DetFns, A, FA),
     fold_expr(DetFns, B, FB),
     ( FA = num(NA), FB = num(NB) ->
@@ -84,7 +79,7 @@ fold_expr(DetFns, binop(Op, A, B), Result) :-
         Result = binop(Op, FA, FB)
     ).
 
-fold_expr(DetFns, if(C, T, E), Result) :-
+fold_expr(DetFns, if(C, T, E), Result) :- !,
     fold_expr(DetFns, C, FC),
     fold_expr(DetFns, T, FT),
     fold_expr(DetFns, E, FE),
@@ -98,7 +93,7 @@ fold_expr(DetFns, if(C, T, E), Result) :-
 %% let: propagate known-constant bindings forward, then inline any
 %% binding that folded to a literal and drop it, literals are free
 %% to duplicate, so there's no reason to keep them on the rack.
-fold_expr(DetFns, let(Bindings, Body), Result) :-
+fold_expr(DetFns, let(Bindings, Body), Result) :- !,
     fold_let_bindings(DetFns, Bindings, [], FBindings, ConstSubs),
     ( ConstSubs == [] ->
         SubstBody = Body
@@ -112,28 +107,8 @@ fold_expr(DetFns, let(Bindings, Body), Result) :-
         Result = let(FBindings, FBody)
     ).
 
-fold_expr(DetFns, do(Exprs), do(FExprs)) :-
-    maplist(fold_expr(DetFns), Exprs, FExprs).
-
-fold_expr(DetFns, while(Cond, Body), while(FCond, FBody)) :-
-    fold_expr(DetFns, Cond, FCond),
-    maplist(fold_expr(DetFns), Body, FBody).
-
-fold_expr(DetFns, @(E), @(FE)) :-
-    fold_expr(DetFns, E, FE).
-fold_expr(DetFns, 'c@'(E), 'c@'(FE)) :-
-    fold_expr(DetFns, E, FE).
-fold_expr(DetFns, !(A, V), !(FA, FV)) :-
-    fold_expr(DetFns, A, FA),
-    fold_expr(DetFns, V, FV).
-fold_expr(DetFns, 'c!'(A, V), 'c!'(FA, FV)) :-
-    fold_expr(DetFns, A, FA),
-    fold_expr(DetFns, V, FV).
-fold_expr(DetFns, execute(E), execute(FE)) :-
-    fold_expr(DetFns, E, FE).
-
-%% function call: try to fold if det with all-constant args
-fold_expr(DetFns, call(Name, Args), Result) :-
+%% try to fold if det with all-constant args
+fold_expr(DetFns, call(Name, Args), Result) :- !,
     maplist(fold_expr(DetFns), Args, FArgs),
     ( all_constant(FArgs),
       member(detfn(Name, Params, Body), DetFns) ->
@@ -147,6 +122,12 @@ fold_expr(DetFns, call(Name, Args), Result) :-
     ;
         Result = call(Name, FArgs)
     ).
+
+%% nothing to fold
+fold_expr(DetFns, Expr, NewExpr) :-
+    ast_children(Expr, Children),
+    maplist(fold_expr(DetFns), Children, NewChildren),
+    ast_rebuild(Expr, NewChildren, NewExpr).
 
 %% ============================================================
 %% let-binding helpers: constant propagation
@@ -169,30 +150,17 @@ is_literal(addr(_)).
 
 %% subst_vars(+Subs, +Expr, -NewExpr)
 %% Subs = [Name-ReplExpr, ...]. Replaces var(Name) with ReplExpr,
-%% except where a nested let rebinds Name (let* semantics: shadowed
-%% for the rest of that let).
+%% except where a nested let rebinds Name (let*)
 subst_vars(Subs, var(Name), Repl) :- member(Name-Repl, Subs), !.
-subst_vars(_, var(Name), var(Name)).
-subst_vars(_, num(N), num(N)).
-subst_vars(_, str(S), str(S)).
-subst_vars(_, addr(N), addr(N)).
-subst_vars(_, inline(Ops), inline(Ops)).
-subst_vars(Subs, binop(Op, A, B), binop(Op, NA, NB)) :-
-    subst_vars(Subs, A, NA), subst_vars(Subs, B, NB).
-subst_vars(Subs, if(C, T, E), if(NC, NT, NE)) :-
-    subst_vars(Subs, C, NC), subst_vars(Subs, T, NT), subst_vars(Subs, E, NE).
-subst_vars(Subs, let(Bindings, Body), let(NBindings, NBody)) :-
+subst_vars(Subs, let(Bindings, Body), let(NBindings, NBody)) :- !,
     subst_bindings(Subs, Bindings, NBindings, Subs1),
     maplist(subst_vars_(Subs1), Body, NBody).
-subst_vars(Subs, do(Exprs), do(NExprs)) :- maplist(subst_vars_(Subs), Exprs, NExprs).
-subst_vars(Subs, while(C, Body), while(NC, NBody)) :-
-    subst_vars(Subs, C, NC), maplist(subst_vars_(Subs), Body, NBody).
-subst_vars(Subs, @(E), @(NE)) :- subst_vars(Subs, E, NE).
-subst_vars(Subs, 'c@'(E), 'c@'(NE)) :- subst_vars(Subs, E, NE).
-subst_vars(Subs, !(A, V), !(NA, NV)) :- subst_vars(Subs, A, NA), subst_vars(Subs, V, NV).
-subst_vars(Subs, 'c!'(A, V), 'c!'(NA, NV)) :- subst_vars(Subs, A, NA), subst_vars(Subs, V, NV).
-subst_vars(Subs, execute(E), execute(NE)) :- subst_vars(Subs, E, NE).
-subst_vars(Subs, call(Name, Args), call(Name, NArgs)) :- maplist(subst_vars_(Subs), Args, NArgs).
+%% everything else, including var(Name) not in Subs (a childless node,
+%% so it comes back unchanged)
+subst_vars(Subs, Expr, NewExpr) :-
+    ast_children(Expr, Children),
+    maplist(subst_vars_(Subs), Children, NewChildren),
+    ast_rebuild(Expr, NewChildren, NewExpr).
 
 subst_vars_(Subs, E, NE) :- subst_vars(Subs, E, NE).
 
