@@ -3,6 +3,7 @@
 :- use_module(library(lists)).
 :- use_module(library(dcgs)).
 :- use_module(builder).
+:- use_module(constfold).
 
 inline_calls(Defs, InlinedDefs) :-
     build_inline_fns(Defs, InlineFns),
@@ -160,58 +161,7 @@ bindings_for([_-Fresh | RestR], [Arg | RestA], [Bind | RestB]) :-
 %% ============================================================
 
 rename_body(Body, Renames, RenamedBody) :-
-    maplist(rename_expr(Renames), Body, RenamedBody).
+    maplist(rename_pair_to_subst, Renames, Subs),
+    maplist(constfold:subst_vars(Subs), Body, RenamedBody).
 
-rename_expr(R, var(Name), var(Fresh)) :- member(Name-Fresh, R), !.
-rename_expr(_, var(Name), var(Name)).
-rename_expr(_, num(N), num(N)).
-rename_expr(_, str(S), str(S)).
-rename_expr(_, addr(N), addr(N)).
-rename_expr(_, inline(Ops), inline(Ops)).
-
-rename_expr(R, binop(Op, A, B), binop(Op, RA, RB)) :-
-    rename_expr(R, A, RA),
-    rename_expr(R, B, RB).
-
-rename_expr(R, if(C, T, E), if(RC, RT, RE)) :-
-    rename_expr(R, C, RC),
-    rename_expr(R, T, RT),
-    rename_expr(R, E, RE).
-
-%% let* semantics: a binding whose own name shadows an active rename
-%% target drops that target for the rest of this let (bindings after it,
-%% and the body) — it now refers to the local binding, not the outer param.
-rename_expr(R, let(Bindings, Body), let(RBindings, RBody)) :-
-    rename_bindings(R, Bindings, RBindings, R1),
-    maplist(rename_expr(R1), Body, RBody).
-
-rename_expr(R, do(Exprs), do(RExprs)) :-
-    maplist(rename_expr(R), Exprs, RExprs).
-
-rename_expr(R, while(Cond, Body), while(RCond, RBody)) :-
-    rename_expr(R, Cond, RCond),
-    maplist(rename_expr(R), Body, RBody).
-
-rename_expr(R, @(E), @(RE)) :- rename_expr(R, E, RE).
-rename_expr(R, 'c@'(E), 'c@'(RE)) :- rename_expr(R, E, RE).
-rename_expr(R, !(A, V), !(RA, RV)) :-
-    rename_expr(R, A, RA),
-    rename_expr(R, V, RV).
-rename_expr(R, 'c!'(A, V), 'c!'(RA, RV)) :-
-    rename_expr(R, A, RA),
-    rename_expr(R, V, RV).
-rename_expr(R, execute(E), execute(RE)) :- rename_expr(R, E, RE).
-rename_expr(R, call(Name, Args), call(Name, RArgs)) :-
-    maplist(rename_expr(R), Args, RArgs).
-
-rename_bindings(R, [], [], R).
-rename_bindings(R, [bind(Name, Expr) | Rest], [bind(Name, RExpr) | RRest], FinalR) :-
-    rename_expr(R, Expr, RExpr),
-    remove_rename(Name, R, R1),
-    rename_bindings(R1, Rest, RRest, FinalR).
-
-%% drop the Name-_ pair from R, if present, leaving order and the rest intact
-remove_rename(_, [], []).
-remove_rename(Name, [Name-_ | Rest], Rest) :- !.
-remove_rename(Name, [Pair | Rest], [Pair | Rest1]) :-
-    remove_rename(Name, Rest, Rest1).
+rename_pair_to_subst(Name-Fresh, Name-var(Fresh)).
