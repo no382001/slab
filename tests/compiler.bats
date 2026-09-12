@@ -584,6 +584,34 @@ setup() {
   [[ "$warnings" != *"unused extern"* ]]
 }
 
+@test "deadcode: a const referenced only via another const's value is not flagged unused" {
+  warnings="$(compile_warnings '(const A int 10) (const B int (+ A 1)) (def main () : void (emit 65) (bye))')"
+  [[ "$warnings" != *"unused const"*"A"* ]]
+}
+
+@test "prune: a function fully inlined away leaves no label behind" {
+  result="$(compile '(def helper ((x : int)) : int [det inline] (+ x 1)) (def main () : void (emit (helper 5)) (bye))' ir)"
+  [[ "$result" != *"label(helper)"* ]]
+  [[ "$result" == *"label(main)"* ]]
+}
+
+@test "prune: a function fully constant-folded away leaves no label behind" {
+  result="$(compile '(def triple ((x : int)) : int [det] (* x 3)) (def main () : void (emit (triple 7)) (bye))' ir)"
+  [[ "$result" != *"label(triple)"* ]]
+  [[ "$result" == *"label(main)"* ]]
+}
+
+@test "prune: a function whose only call was dropped by cse leaves no label behind" {
+  result="$(compile '(def g () : int [det] 42) (def main () : void (let ((y (g))) (bye)))' ir)"
+  [[ "$result" != *"label(g)"* ]]
+  [[ "$result" == *"label(main)"* ]]
+}
+
+@test "prune: a function still called after optimization keeps its label" {
+  result="$(compile '(def helper ((x : int)) : int [semidet] (@ x)) (def main () : void (emit (helper 1024)) (bye))' ir)"
+  [[ "$result" == *"label(helper)"* ]]
+}
+
 # ============================================================
 # large det sub-expression warnings (auto-decomposition, warn-only)
 # ============================================================
@@ -672,14 +700,12 @@ setup() {
 }
 
 @test "cse: a duplicate occurring only twice is not hoisted (unprofitable)" {
-  # a two-occurrence duplicate isn't profitable to hoist (this is the
-  # case that regressed chip8.bin by 4 bytes before the check existed)
-  result="$(compile '(def f ((a : int) (b : int)) : int (+ (* a b) (* a b))) (def main () : void (emit (f 5 6)) (bye))' ir)"
+  result="$(compile '(const A int 1024) (const B int 1026) (def main () : void (! A 5) (! B 6) (let ((a (@ A)) (b (@ B))) (emit (+ (* a b) (* a b)))) (bye))' ir)"
   [ "$(grep -o 'op(\*)' <<< "$result" | wc -l)" -eq 2 ]
 }
 
 @test "cse: a duplicate occurring three times is profitable and gets hoisted" {
-  result="$(compile '(def f ((a : int) (b : int)) : int (+ (+ (* a b) (* a b)) (* a b))) (def main () : void (emit (f 5 6)) (bye))' ir)"
+  result="$(compile '(const A int 1024) (const B int 1026) (def main () : void (! A 5) (! B 6) (let ((a (@ A)) (b (@ B))) (emit (+ (+ (* a b) (* a b)) (* a b)))) (bye))' ir)"
   [ "$(grep -o 'op(\*)' <<< "$result" | wc -l)" -eq 1 ]
 }
 

@@ -100,6 +100,7 @@ canon_pipeline(Src, EffEnv, Defs) :-
    true.
 
 %% mixed-operator boundary
+?- canon_expr([], binop(+, binop(-, var(a), var(b)), var(c)), R),
    R == binop(+, var(c), binop(-, var(a), var(b))).
    true.
 

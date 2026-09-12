@@ -132,7 +132,9 @@ compile_from_forms(Forms, Target, DefLines, SlotBase, Result) :-
                 constfold:fold_constants(CanonDefs, EffectEnv, FoldedDefs),
                 %% Stage 3.75: common subexpression elimination
                 cse:cse_defs(FoldedDefs, EffectEnv, CsedDefs),
-                codegen:compile_program(CsedDefs, SlotBase1, CgResult),
+                %% Stage 3.8: prune defs left unreachable by the passes
+                deadcode:prune_dead_defs(CsedDefs, LiveDefs),
+                codegen:compile_program(LiveDefs, SlotBase1, CgResult),
                 ( CgResult \= ok(_) ->
                     Result = error(codegen, CgResult)
                 ; CgResult = ok(Tokens),
