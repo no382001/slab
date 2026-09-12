@@ -4,6 +4,7 @@
 :- use_module(library(dcgs)).
 :- use_module(builder).
 :- use_module(constfold).
+:- use_module(ast_shape).
 
 inline_calls(Defs, InlinedDefs) :-
     build_inline_fns(Defs, InlineFns),
@@ -79,43 +80,7 @@ max_inline_depth(8).
 
 inline_expr(_, 0, E, E) :- !.
 
-inline_expr(_, _, num(N), num(N)).
-inline_expr(_, _, str(S), str(S)).
-inline_expr(_, _, var(V), var(V)).
-inline_expr(_, _, addr(N), addr(N)).
-inline_expr(_, _, inline(Ops), inline(Ops)).
-
-inline_expr(Fns, D, binop(Op, A, B), binop(Op, IA, IB)) :-
-    inline_expr(Fns, D, A, IA),
-    inline_expr(Fns, D, B, IB).
-
-inline_expr(Fns, D, if(C, T, E), if(IC, IT, IE)) :-
-    inline_expr(Fns, D, C, IC),
-    inline_expr(Fns, D, T, IT),
-    inline_expr(Fns, D, E, IE).
-
-inline_expr(Fns, D, let(Bindings, Body), let(IBindings, IBody)) :-
-    maplist(inline_binding(Fns, D), Bindings, IBindings),
-    maplist(inline_expr(Fns, D), Body, IBody).
-
-inline_expr(Fns, D, do(Exprs), do(IExprs)) :-
-    maplist(inline_expr(Fns, D), Exprs, IExprs).
-
-inline_expr(Fns, D, while(Cond, Body), while(ICond, IBody)) :-
-    inline_expr(Fns, D, Cond, ICond),
-    maplist(inline_expr(Fns, D), Body, IBody).
-
-inline_expr(Fns, D, @(E), @(IE)) :- inline_expr(Fns, D, E, IE).
-inline_expr(Fns, D, 'c@'(E), 'c@'(IE)) :- inline_expr(Fns, D, E, IE).
-inline_expr(Fns, D, !(A, V), !(IA, IV)) :-
-    inline_expr(Fns, D, A, IA),
-    inline_expr(Fns, D, V, IV).
-inline_expr(Fns, D, 'c!'(A, V), 'c!'(IA, IV)) :-
-    inline_expr(Fns, D, A, IA),
-    inline_expr(Fns, D, V, IV).
-inline_expr(Fns, D, execute(E), execute(IE)) :- inline_expr(Fns, D, E, IE).
-
-%% call to an inline-eligible function: expand into a let
+%% call to an inline-eligible function
 inline_expr(Fns, D, call(Name, Args), Result) :-
     member(inl(Name, Params, Body), Fns), !,
     maplist(inline_expr(Fns, D), Args, IArgs),
@@ -126,12 +91,11 @@ inline_expr(Fns, D, call(Name, Args), Result) :-
     maplist(inline_expr(Fns, D1), RenamedBody, InlinedBody),
     builder:mk_let(Bindings, InlinedBody, Result).
 
-%% ordinary call: just recurse into the arguments
-inline_expr(Fns, D, call(Name, Args), call(Name, IArgs)) :-
-    maplist(inline_expr(Fns, D), Args, IArgs).
-
-inline_binding(Fns, D, bind(Name, Expr), bind(Name, IExpr)) :-
-    inline_expr(Fns, D, Expr, IExpr).
+%% everything else, including an ordinary (non-inlined) call
+inline_expr(Fns, D, Expr, NewExpr) :-
+    ast_children(Expr, Children),
+    maplist(inline_expr(Fns, D), Children, NewChildren),
+    ast_rebuild(Expr, NewChildren, NewExpr).
 
 %% ============================================================
 %% fresh names for a callee's params, one per call site

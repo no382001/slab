@@ -3,6 +3,7 @@
 :- use_module(library(lists)).
 :- use_module(effects).
 :- use_module(cse).
+:- use_module(ast_shape).
 
 %% ============================================================
 %% entry point
@@ -45,29 +46,10 @@ det_regions_list(Exprs, EffectEnv, Regions) :-
     append(RegionsPerExpr, Regions).
 det_regions_(EffectEnv, Expr, Regions) :- det_regions(Expr, EffectEnv, Regions).
 
-det_region_children(inline(_), _, []).
-det_region_children(binop(_, A, B), EffectEnv, Regions) :-
-    det_regions_list([A, B], EffectEnv, Regions).
-det_region_children(@(E), EffectEnv, Regions) :- det_regions(E, EffectEnv, Regions).
-det_region_children('c@'(E), EffectEnv, Regions) :- det_regions(E, EffectEnv, Regions).
-det_region_children(!(A, V), EffectEnv, Regions) :- det_regions_list([A, V], EffectEnv, Regions).
-det_region_children('c!'(A, V), EffectEnv, Regions) :- det_regions_list([A, V], EffectEnv, Regions).
-det_region_children(execute(E), EffectEnv, Regions) :- det_regions(E, EffectEnv, Regions).
-det_region_children(if(C, T, E), EffectEnv, Regions) :-
-    det_regions_list([C, T, E], EffectEnv, Regions).
-det_region_children(while(C, Body), EffectEnv, Regions) :-
-    det_regions_list([C|Body], EffectEnv, Regions).
-det_region_children(do(Exprs), EffectEnv, Regions) :-
-    det_regions_list(Exprs, EffectEnv, Regions).
-det_region_children(let(Bindings, Body), EffectEnv, Regions) :-
-    binding_exprs(Bindings, BExprs),
-    append(BExprs, Body, All),
-    det_regions_list(All, EffectEnv, Regions).
-det_region_children(call(_, Args), EffectEnv, Regions) :-
-    det_regions_list(Args, EffectEnv, Regions).
-
-binding_exprs([], []).
-binding_exprs([bind(_, E)|Rest], [E|Es]) :- binding_exprs(Rest, Es).
+%% every node's children are its regions to descend into
+det_region_children(Expr, EffectEnv, Regions) :-
+    ast_children(Expr, Children),
+    det_regions_list(Children, EffectEnv, Regions).
 
 %% ============================================================
 %% tests
