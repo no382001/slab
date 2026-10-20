@@ -2,7 +2,7 @@
   "name": "sets-lang",
   "displayName": "Sets Language",
   "description": "Syntax highlighting for the Sets programming language (.sets files)",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "publisher": "local",
   "engines": {
     "vscode": "^1.75.0"

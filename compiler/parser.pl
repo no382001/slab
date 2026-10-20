@@ -24,7 +24,7 @@ program([F|Fs]) --> ws, form(F), !, program(Fs).
 program([]) --> ws.
 
 %% ============================================================
-%% forms — all clauses together to avoid discontiguous warning
+%% forms
 %% ============================================================
 
 form(list(Elems))    --> ['('], !, ws, list_elems(Elems), ws, [')'].

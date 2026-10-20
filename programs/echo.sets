@@ -6,6 +6,10 @@
 
 ($include "core.sets")
 
+( a b -- true? )
+: streq ... ;
+
+
 (def streq ((a : int) (b : int)) : bool
   (! STRI 0)
   (while (if (= (c@ (+ a (@ STRI))) (c@ (+ b (@ STRI))))

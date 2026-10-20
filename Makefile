@@ -90,6 +90,11 @@ format-check:
 	clang-format --dry-run --Werror $(wildcard src/*.cpp) $(wildcard src/*.h) \
 	             $(wildcard $(CHIP8_DIR)/*.cpp) $(wildcard $(CHIP8_DIR)/*.h)
 
+.PHONY: vscode
+vscode:
+	mkdir -p $(HOME)/.vscode/extensions
+	ln -sfn $(CURDIR)/editors/vscode-sets $(HOME)/.vscode/extensions/local.sets-lang
+
 .PHONY: test
 test: quad bats
 

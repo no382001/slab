@@ -54,17 +54,15 @@ rebuild_assoc(Op, [L|Ls], binop(Op, L, Rest)) :-
     rebuild_assoc(Op, Ls, Rest).
 
 %% term_sort(+List, -Sorted)
-%% stable insertion sort keeping duplicates
-term_sort(List, Sorted) :- term_sort_(List, [], Sorted).
+%% standard order, keeping duplicates: sort/2 would turn a + a into a.
+%% keysort/2 keeps duplicate keys.
+term_sort(List, Sorted) :-
+    keyed(List, Pairs),
+    keysort(Pairs, SortedPairs),
+    keyed(Sorted, SortedPairs).
 
-term_sort_([], Acc, Acc).
-term_sort_([X|Xs], Acc0, Sorted) :-
-    term_insert(X, Acc0, Acc1),
-    term_sort_(Xs, Acc1, Sorted).
-
-term_insert(X, [], [X]).
-term_insert(X, [Y|Ys], [X, Y|Ys]) :- X @=< Y, !.
-term_insert(X, [Y|Ys], [Y|Rest]) :- term_insert(X, Ys, Rest).
+keyed([], []).
+keyed([X|Xs], [X-_|Ps]) :- keyed(Xs, Ps).
 
 %% ============================================================
 %% tests
