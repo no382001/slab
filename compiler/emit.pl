@@ -1,4 +1,4 @@
-:- module(emit, [emit_binary/2]).
+:- module(emit, [emit_binary/2, emit_binary/3, code_size/2, entry_size/1]).
 
 :- use_module(library(lists)).
 :- use_module(library(dcgs)).
@@ -11,6 +11,28 @@
 emit_binary(Tokens, Bytes) :-
     collect_labels(Tokens, 0, Labels),
     encode_tokens(Tokens, Labels, Bytes).
+
+%% emit_binary(+Tokens, +Base, -Bytes)
+%% branch(main) at 0, zero padding, then Tokens laid out from Base.
+emit_binary(Tokens, Base, Bytes) :-
+    collect_labels(Tokens, Base, Labels),
+    encode_tokens([branch(main)], Labels, Entry),
+    entry_size(E),
+    PadLen is Base - E,
+    length(Pad, PadLen),
+    maplist(=(0), Pad),
+    encode_tokens(Tokens, Labels, Code),
+    phrase((seq(Entry), seq(Pad), seq(Code)), Bytes).
+
+entry_size(S) :- token_size(branch(main), S).
+
+code_size(Tokens, Size) :- collect_labels_size(Tokens, 0, Size).
+
+collect_labels_size([], S, S).
+collect_labels_size([T | Ts], S0, S) :-
+    token_size(T, TS),
+    S1 is S0 + TS,
+    collect_labels_size(Ts, S1, S).
 
 %% ============================================================
 %% pass 1: collect label -> byte offset mapping

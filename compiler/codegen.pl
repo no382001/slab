@@ -1,4 +1,4 @@
-:- module(codegen, [compile_program/3]).
+:- module(codegen, [compile_program/3, compile_program/4]).
 
 :- use_module(library(lists)).
 :- use_module(library(dcgs)).
@@ -12,16 +12,18 @@
 %% entry
 %% ============================================================
 
-compile_program(Defs, SlotBase, ok(Code)) :-
+compile_program(Defs, SlotBase, Result) :-
+    compile_program(Defs, SlotBase, _, Result).
+
+%% SlotEnd is one past the last param slot
+compile_program(Defs, SlotBase, SlotEnd, ok(Code)) :-
     collect_consts(Defs, Consts),
     register_void_funcs(Defs),
     register_ext_traps(Defs),
     register_variadic_funcs(Defs),
     %% Align SlotBase to next even boundary (slots are 2 bytes)
-    SlotBase0 is SlotBase + (SlotBase mod 2),
-    %% Ensure slots start above 16384 minimum even without $alloc globals
-    SlotStart is max(SlotBase0, 16384),
-    compile_defs(Defs, Consts, 0, SlotStart, Code).
+    SlotStart is SlotBase + (SlotBase mod 2),
+    compile_defs(Defs, Consts, 0, SlotStart, Code, SlotEnd).
 
 register_void_funcs(Defs) :-
     retractall(user_void_func(_)),
@@ -129,10 +131,10 @@ collect_consts([_ | Rest], Cs) :-
 %% compile definitions
 %% ============================================================
 
-compile_defs([], _, _, _, []).
-compile_defs([Def | Rest], Consts, LN0, Slot0, Code) :-
+compile_defs([], _, _, Slot, [], Slot).
+compile_defs([Def | Rest], Consts, LN0, Slot0, Code, SlotEnd) :-
     compile_def(Def, Consts, LN0, Slot0, DefCode, LN1, Slot1),
-    compile_defs(Rest, Consts, LN1, Slot1, RestCode),
+    compile_defs(Rest, Consts, LN1, Slot1, RestCode, SlotEnd),
     phrase((seq(DefCode), seq(RestCode)), Code).
 
 compile_def(extern(_, _, _), _, LN, Slot, [], LN, Slot).

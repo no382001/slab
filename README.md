@@ -1,6 +1,6 @@
 # slab
 
-*slab* is a flat-memory stack VM. It comes with **sets** *((**s**)-(**e**)xpression (**t**)yped (**s**)ystems language)*, a statically-typed s-expression language that compiles to slab bytecode. The instruction set is small and word-addressed, easy to target from a simple compiler and easy to extend. sets itself is written in Scryer Prolog; the VM in C++20.
+*slab* is a flat-memory stack VM. It comes with **sets** *((**s**)-(**e**)xpression (**t**)yped (**s**)ystems language)*, a statically-typed s-expression language that compiles to slab bytecode. The instruction set is small and word-addressed, easy to target from a simple compiler and easy to extend. sets itself is written in [Scryer Prolog](https://github.com/mthom/scryer-prolog); the VM in C++20.
 
 `examples/forth/forth.sets` is a Forth interpreter written in sets, compiled to slab bytecode. `./mandelbrot` compiles it, loads `examples/forth/mandelbrot.fth`, and runs.
 
@@ -37,9 +37,9 @@ Some time ago I found a word-sized celled Forth VM on the [Silicon Valley Forth 
 
 This is where Prolog comes in, just like in one of my previous/ongoing projects, a [PDP-11/40 emulator](https://github.com/no382001/pdp-11-40-emulator), where the pattern was the same: the emulator loops reading bytes from a stdin pipe, and a Prolog pipeline takes a list of atoms representing primitive instructions, encodes them, and pushes them down the pipe. Lists in Prolog make this kind of thing really easy to work with, and later when the compiler grows, pattern matching and DCGs make parsing and AST transformations trivial. Coming from the BCPL-like language I had there, I tried a C-like macro pasting approach to paper over the non-existence of named words at the bytecode level, which made everything even more confusing, and on top of that the postfix notation was catching up to me. When you take some weeks off and come back it can be baffling. I'm more of an s-expressions guy anyway, so I wrote a frontend for that instead.
 
-Around the same time I remembered something I tried with my Scheme interpreter: I wanted to write an MCE (metacircular evaluator) that enabled some sort of typed Scheme, never got to it, got stuck on some combination of macros and semiquoting (made me drop the project). This felt like the right moment to try again. Type inference works as stack effect inference basically: Sets functions can only leave one value on the stack (or void), not two or more, just to keep things simple. While the compiler is catching type errors it can also infer `det`/`semidet`/`nondet` the same way and do const folding on top.
+Around the same time I remembered something I tried with my Scheme interpreter: I wanted to write an MCE (metacircular evaluator) that enabled some sort of typed Scheme, never got to it, got stuck on some combination of macros and semiquoting (made me drop the project). This felt like the right moment to try again. Type inference works as stack effect inference basically: sets functions can only leave one value on the stack (or void), not two or more, just to keep things simple. While the compiler is catching type errors it can also infer `det`/`semidet`/`nondet` the same way and do const folding on top.
 
-Sets does betray the Forth philosophy to some degree, though the type system and effect inference help keep kernel development in check. The Forth written in Sets and targeting the Forth VM is free to be as Forth as it wants, as long as it keeps to the memory boundaries the REPL sets behind it.
+sets does betray the Forth philosophy to some degree, though the type system and effect inference help keep kernel development in check. The Forth written in sets and targeting the Forth VM is free to be as Forth as it wants, as long as it keeps to the memory boundaries the REPL sets behind it.
 
 ## build
 
@@ -86,6 +86,7 @@ extern     = '(' 'extern' symbol param-types ':' type ')'
 const      = '(' 'const' symbol type expr ')' ;
 directive  = '(' '$include' string ')'
            | '(' '$section' number ')'
+           | '(' '$code-starts-at' number ')'
            | '(' '$alloc' symbol number ')' ;
 
 params     = '(' param* rest-param? ')' ;
@@ -179,6 +180,7 @@ Directives are compile-time only, they emit no code.
 |-----------|-------------|
 | `($include "file")` | splices `file` into the current program at this point, resolved relative to the including file's directory |
 | `($section addr)` | sets the static allocation cursor to `addr` |
+| `($code-starts-at addr)` | places the code at `addr`; without it the code goes in the first free gap after the data. Address 0 always holds a jump to `main` |
 | `($alloc name size)` | binds `name` to the current cursor as an `int` constant, then advances the cursor by `size` bytes |
 | `($vm-sp)` / `($vm-rp)` / `($vm-ip)` | expand to the memory address of the VM's SP/RP/IP register (memory-mapped, see [memory model](#memory-model)) |
 | `($op name)` | expands to an opcode's numeric code (from `gen/gen.pl`), for use inside `{...}` inline asm |
@@ -190,7 +192,6 @@ Directives are compile-time only, they emit no code.
 `programs/echo.sets`:
 
 ```lisp
-($section 1022)
 ($alloc BUF 256)
 
 ($include "../lib/core.sets") ; true/false, byte-ref, byte-set!
@@ -230,24 +231,18 @@ Directives are compile-time only, they emit no code.
 Memory layout of the above program at runtime (default config):
 
 ```
-; $section 1022 sets the cursor; $alloc advances it, then each local takes the next cell
+; address 0 holds the jump to main; data is laid out from there:
+; $alloc first, then locals, then params, each function in definition order.
+; the code goes in the first free gap that fits it (or at $code-starts-at)
 
- addr  0        ~N    1022            1278  1280  1282  1284
-       +--------+-----+---------------+-----+-----+-----+-----+
-       |  code  |     |      BUF      |  i  |  i  |  c  |  i  | ...
-       +--------+-----+---------------+-----+-----+-----+-----+
-                       <--256 bytes--> streq  read-line  print-line
+ addr  0    4               260 262 264 266 268 270 272 274          714
+       +----+---------------+---+---+---+---+---+---+---+------------+
+       |jmp |      BUF      | i | i | c | i | a | b | s |    code    |
+       +----+---------------+---+---+---+---+---+---+---+------------+
 
-; "bye" string literal is inlined in the code region (branch over + bytes + lit addr)
-
-; param slots are statically assigned per-function, in definition order, starting at 0x4000
-; (let bindings live on the return stack instead)
-
- addr  16384  16386  16388
-       +------+------+------------+
-       |  a   |  b   |     s      |
-       |    streq    | print-line |
-       +------+------+------------+
+; BUF is 256 bytes; i, i, c, i are the locals of streq, read-line (2) and print-line;
+; a, b, s are the params of streq and print-line. let bindings live on the return stack.
+; the "bye" string literal is inlined in the code (branch over + bytes + lit addr)
 
 ; stacks and registers occupy the top of address space
 ; (with MEMORY_SIZE=65535, STACK_SIZE=256, CELL_SIZE=2)
@@ -267,7 +262,7 @@ The compiler is a multi-pass Prolog program (`compiler/`):
 | stage | file | description |
 |-------|------|-------------|
 | parse | `parser.pl` | characters -> s-expression forms (DCG) |
-| meta-expansion | `compiler.pl` | expand `$include`/`$section`/`$alloc` directives and `$vm-*`/`$op` meta-constants into literals |
+| meta-expansion | `compiler.pl` | expand `$include`/`$section`/`$alloc`/`$code-starts-at` directives and `$vm-*`/`$op` meta-constants into literals |
 | ast | `ast.pl` | forms -> typed AST nodes |
 | locals | `locals.pl` | expand `local` bindings into statically-allocated memory cells |
 | typecheck | `typecheck.pl` | monomorphic type synthesis + checking |
@@ -285,12 +280,12 @@ The assembler binding (`gen/gen.pl`) is auto-generated from the C++ dispatch tab
 
 ### memory model
 
-Flat byte-addressable memory. Programs are loaded at address 0 and grow upward. The two stacks (data and return) are fixed-size regions at the top of the address space, laid out downward from `MEMORY_SIZE`:
+Flat byte-addressable memory. The binary is loaded at address 0, which holds a jump to `main`; the compiler lays out data and code above it (see [example](#example)). The two stacks (data and return) are fixed-size regions at the top of the address space, laid out downward from `MEMORY_SIZE`:
 
 ```
 0                                                           MEMORY_SIZE
 +---------------------------------+-------+----------+----------+
-| program + heap (grows ->)       | regs  |  dstack  |  rstack  |
+| entry, data, code, heap          | regs  |  dstack  |  rstack  |
 +---------------------------------+-------+----------+----------+
                                   DS_START-n DS_START  RS_START
 ```

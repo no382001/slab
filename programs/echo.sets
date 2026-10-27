@@ -1,4 +1,3 @@
-($section 1022)
 ($alloc BUF 256)
 
 ($include "../lib/core.sets")

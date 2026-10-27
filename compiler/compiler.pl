@@ -37,12 +37,12 @@ compile_source(Source, Target, Result) :-
         Result = error(parse, ParseResult)
     ; ParseResult = ok(Forms),
       %% Stage 1.5: meta-expansion ($section, $alloc, $vm-sp, etc.)
-      expand_metas(Forms, Expanded, FinalPtr),
+      expand_metas(Forms, Expanded, Layout),
       compute_def_lines(Source, DefLines),
       ( Target = parsed ->
           Result = ok(Expanded)
       ;
-          compile_from_forms(Expanded, Target, DefLines, FinalPtr, Result)
+          compile_from_forms(Expanded, Target, DefLines, Layout, Result)
       )
     ).
 
@@ -74,17 +74,17 @@ compile_source_with_includes(Source, BaseDir, Target, Result) :-
       compute_def_lines(Source, MainDefLines),
       expand_includes(Forms, BaseDir, IncExpanded, IncDefLines),
       phrase((seq(MainDefLines), seq(IncDefLines)), DefLines),
-      expand_metas(IncExpanded, Expanded, FinalPtr),
+      expand_metas(IncExpanded, Expanded, Layout),
       ( Target = parsed ->
           Result = ok(Expanded)
       ;
-          compile_from_forms(Expanded, Target, DefLines, FinalPtr, Result)
+          compile_from_forms(Expanded, Target, DefLines, Layout, Result)
       )
     )
     ).
 
 %% compile pipeline from already-parsed (and include-expanded) forms
-compile_from_forms(Forms, Target, DefLines, SlotBase, Result) :-
+compile_from_forms(Forms, Target, DefLines, layout(SlotBase, Regions0, CodeAt), Result) :-
     ast:transform_program(Forms, AstResult),
     ( AstResult \= ok(_) ->
         Result = error(ast, AstResult)
@@ -134,7 +134,7 @@ compile_from_forms(Forms, Target, DefLines, SlotBase, Result) :-
                 cse:cse_defs(FoldedDefs, EffectEnv, CsedDefs),
                 %% Stage 3.8: prune defs left unreachable by the passes
                 deadcode:prune_dead_defs(CsedDefs, LiveDefs),
-                codegen:compile_program(LiveDefs, SlotBase1, CgResult),
+                codegen:compile_program(LiveDefs, SlotBase1, SlotEnd, CgResult),
                 ( CgResult \= ok(_) ->
                     Result = error(codegen, CgResult)
                 ; CgResult = ok(Tokens),
@@ -142,9 +142,18 @@ compile_from_forms(Forms, Target, DefLines, SlotBase, Result) :-
                       Result = ok(Tokens)
                   ;
                       ( member(label(main), Tokens) ->
-                          phrase(([branch(main)], seq(Tokens)), AllTokens),
-                          emit:emit_binary(AllTokens, Bytes),
-                          Result = ok(Bytes)
+                          emit:code_size(Tokens, Size),
+                          Regions = [SlotBase-SlotBase1, SlotBase1-SlotEnd | Regions0],
+                          place_code(CodeAt, Size, Regions, Placed),
+                          ( Placed = ok(Base) ->
+                              emit:emit_binary(Tokens, Base, Bytes),
+                              Result = ok(Bytes)
+                          ;
+                              Placed = error(Reason),
+                              diagnostics:write_stderr("error: no room for code: "),
+                              write(user_error, Reason), nl(user_error),
+                              Result = error(layout, Reason)
+                          )
                       ;
                           diagnostics:write_stderr("error: no main function defined\n"),
                           Result = error(no_main)
@@ -200,31 +209,60 @@ meta_const('$vm-sp', A)  :- meta_const('$ds-start', DS), A is DS - 6.
 meta_const('$vm-rp', A)  :- meta_const('$ds-start', DS), A is DS - 4.
 meta_const('$vm-ip', A)  :- meta_const('$ds-start', DS), A is DS - 2.
 
-%% expand_metas(+Forms, -Expanded, -FinalPtr)
-%% Process top-level forms, expanding $-prefixed meta directives.
-%% FinalPtr is the allocation pointer after the last $alloc — use as slot base.
-expand_metas(Forms, Expanded, FinalPtr) :-
-    expand_metas_(Forms, 0, Expanded, FinalPtr).
+%% expand_metas(+Forms, -Expanded, -Layout)
+%% Layout = layout(FinalPtr, Regions, CodeAt): the cursor after the last $alloc,
+%% the [Start, End) data regions, and at(Addr) from $code-starts-at or none.
+expand_metas(Forms, Expanded, layout(FinalPtr, Regions, CodeAt)) :-
+    emit:entry_size(E),
+    expand_metas_(Forms, E, Expanded, FinalPtr, Regions, none, CodeAt).
 
-%% expand_metas_(+Forms, +AllocPtr, -Expanded, -FinalPtr)
-expand_metas_([], Ptr, [], Ptr).
+expand_metas_([], Ptr, [], Ptr, [], CA, CA).
 
-%% ($section addr) — set allocation pointer
-expand_metas_([list([sym('$section'), num(Addr)])|Rest], _, Expanded, FinalPtr) :-
+%% ($section addr) - set allocation pointer
+expand_metas_([list([sym('$section'), num(Addr)])|Rest], _, Expanded, FinalPtr, Rs, CA0, CA) :-
     !,
-    expand_metas_(Rest, Addr, Expanded, FinalPtr).
+    expand_metas_(Rest, Addr, Expanded, FinalPtr, Rs, CA0, CA).
 
-%% ($alloc name size) — allocate and emit const
-expand_metas_([list([sym('$alloc'), sym(Name), num(Size)])|Rest], Ptr, [Const|Expanded], FinalPtr) :-
+%% ($code-starts-at addr) - place code at addr instead of the first free gap
+expand_metas_([list([sym('$code-starts-at'), num(Addr)])|Rest], Ptr, Expanded, FinalPtr, Rs, _, CA) :-
+    !,
+    expand_metas_(Rest, Ptr, Expanded, FinalPtr, Rs, at(Addr), CA).
+
+%% ($alloc name size) - allocate and emit const
+expand_metas_([list([sym('$alloc'), sym(Name), num(Size)])|Rest], Ptr, [Const|Expanded], FinalPtr, [Ptr-NextPtr|Rs], CA0, CA) :-
     !,
     Const = list([sym(const), sym(Name), sym(int), num(Ptr)]),
     NextPtr is Ptr + Size,
-    expand_metas_(Rest, NextPtr, Expanded, FinalPtr).
+    expand_metas_(Rest, NextPtr, Expanded, FinalPtr, Rs, CA0, CA).
 
-%% any other form — recursively expand meta-expressions inside it
-expand_metas_([Form|Rest], Ptr, [Expanded|ExpandedRest], FinalPtr) :-
+%% any other form - recursively expand meta-expressions inside it
+expand_metas_([Form|Rest], Ptr, [Expanded|ExpandedRest], FinalPtr, Rs, CA0, CA) :-
     expand_meta_expr(Form, Expanded),
-    expand_metas_(Rest, Ptr, ExpandedRest, FinalPtr).
+    expand_metas_(Rest, Ptr, ExpandedRest, FinalPtr, Rs, CA0, CA).
+
+%% place_code(+CodeAt, +Size, +Regions, -Result)
+%% Result = ok(Base) | error(Reason); code may not overlap a region or the registers
+place_code(at(Base), Size, Regions, Result) :- !,
+    End is Base + Size,
+    emit:entry_size(E),
+    ( Base < E -> Result = error(code_overlaps_entry(Base))
+    ; member(S-X, Regions), Base < X, S < End -> Result = error(code_overlaps_data(Base, End, S-X))
+    ; meta_const('$vm-sp', Top), End > Top -> Result = error(code_too_large(Base, End))
+    ; Result = ok(Base)
+    ).
+place_code(none, Size, Regions, Result) :-
+    emit:entry_size(E),
+    sort(Regions, Sorted),
+    first_fit(Sorted, E, Size, Base),
+    meta_const('$vm-sp', Top),
+    ( Base + Size =< Top -> Result = ok(Base) ; Result = error(code_too_large(Base, Size)) ).
+
+first_fit([], Cand0, _, Cand) :- Cand is Cand0 + (Cand0 mod 2).
+first_fit([S-X|Rs], Cand0, Size, Base) :-
+    Cand is Cand0 + (Cand0 mod 2),
+    ( Cand + Size =< S -> Base = Cand
+    ; Next is max(Cand, X), first_fit(Rs, Next, Size, Base)
+    ).
 
 %% expand_meta_expr: replace ($vm-sp) etc. with num(N) inside any form
 expand_meta_expr(list([sym(Name)]), num(Val)) :-
