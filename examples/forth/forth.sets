@@ -1,9 +1,8 @@
 ;; ---- heap ----
-;; Must be below SlotStart (= FinalPtr after all $alloc).
-;; Code is ~5KB; 8192 gives safe margin and is far below SlotStart (~35036).
+;; sized to HEAP_LIMIT so the compiler keeps code out of it
 ($section 8192)
-($alloc HEAP 0)
-(const HEAP_LIMIT int 32000) ; must stay below SlotStart (~35036)
+($alloc HEAP 23808)
+(const HEAP_LIMIT int 32000) ; = HEAP + 23808, must stay below 32768
 
 ;; ---- scratch cells ----
 ($section 32768)

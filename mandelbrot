@@ -9,7 +9,7 @@ fth="$forth_dir/mandelbrot.fth"
 
 needs_build=0
 [ ! -f "$bin" ] && needs_build=1
-for f in "$forth_dir"/*.sets; do
+for f in "$forth_dir"/*.sets "$dir"/compiler/*.pl; do
   [ "$f" -nt "$bin" ] && needs_build=1
 done
 
