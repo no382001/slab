@@ -1,36 +1,35 @@
 ($section 1022)
-($alloc STRI  2)
-($alloc CHAR  2)
-($alloc IDX   2)
 ($alloc BUF 256)
 
-($include "core.sets")
+($include "../lib/core.sets")
 
-( a b -- true? )
-: streq ... ;
+(def streq ((a : (ptr byte)) (b : (ptr byte))) : bool [semidet]
+  (local ((i 0))
+    (while (and (= (byte-ref a i) (byte-ref b i))
+                (!= (byte-ref a i) 0))
+      (! i (+ (@ i) 1)))
+    (= (byte-ref a i) (byte-ref b i))))
 
+; read a line into BUF, null-terminated
+(def read-line () : void [nondet]
+  (local ((i 0) (c (key)))
+    (while (!= (@ c) 10)
+      (byte-set! BUF i (@ c))
+      (! i (+ (@ i) 1))
+      (! c (key)))
+    (byte-set! BUF i 0)))
 
-(def streq ((a : int) (b : int)) : bool
-  (! STRI 0)
-  (while (if (= (c@ (+ a (@ STRI))) (c@ (+ b (@ STRI))))
-           (!= (c@ (+ a (@ STRI))) 0)
-           false)
-    (! STRI (+ (@ STRI) 1)))
-  (= (c@ (+ a (@ STRI))) (c@ (+ b (@ STRI)))))
+; print a null-terminated string, then a newline
+(def print-line ((s : (ptr byte))) : void [nondet]
+  (local ((i 0))
+    (while (!= (byte-ref s i) 0)
+      (emit (byte-ref s i))
+      (! i (+ (@ i) 1)))
+    (emit 10)))
 
-(def main () : void
+(def main () : void [nondet]
   (while true
-    (! IDX 0)
-    (while (do (! CHAR (key))
-               (!= (@ CHAR) 10))
-      (c! (+ BUF (@ IDX)) (@ CHAR))
-      (! IDX (+ (@ IDX) 1)))
-    (c! (+ BUF (@ IDX)) 0)
-
+    (read-line)
     (if (streq BUF "bye")
       (bye)
-      (do (! IDX 0)
-          (while (!= (c@ (+ BUF (@ IDX))) 0)
-            (emit (c@ (+ BUF (@ IDX))))
-            (! IDX (+ (@ IDX) 1)))
-          (emit 10)))))
+      (print-line BUF))))

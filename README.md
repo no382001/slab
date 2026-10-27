@@ -1,8 +1,6 @@
 # slab
 
-> **draft** — work in progress, details may change
-
-*slab* is a flat-memory stack VM. It comes with **sets** *((**s**)-(**e**)xpression (**t**)yped (**s**)ystems language)* — a statically-typed s-expression language that compiles to slab bytecode. The instruction set is small and word-addressed, easy to target from a simple compiler and easy to extend. sets itself is written in Scryer Prolog; the VM in C++20.
+*slab* is a flat-memory stack VM. It comes with **sets** *((**s**)-(**e**)xpression (**t**)yped (**s**)ystems language)*, a statically-typed s-expression language that compiles to slab bytecode. The instruction set is small and word-addressed, easy to target from a simple compiler and easy to extend. sets itself is written in Scryer Prolog; the VM in C++20.
 
 `examples/forth/forth.sets` is a Forth interpreter written in sets, compiled to slab bytecode. `./mandelbrot` compiles it, loads `examples/forth/mandelbrot.fth`, and runs.
 
@@ -10,8 +8,13 @@
 
 *`cat examples/forth/mandelbrot.fth` then `./mandelbrot`*
 
+## talk
+
+slab and sets were presented at the Scryer Prolog Meetup 2026 in Vienna. Slides: [scryer-meetup-2026/slab-sets.pdf](scryer-meetup-2026/slab-sets.pdf).
+
 ## contents
 
+- [talk](#talk)
 - [ramble](#ramble)
 - [build](#build)
 - [usage](#usage)
@@ -19,10 +22,9 @@
 - [language](#language)
   - [syntax](#syntax-ebnf)
   - [types](#types)
-  - [effect annotations](#effect-annotations)
+  - [effect inference](#effect-inference)
   - [built-in primitives](#built-in-primitives)
   - [directives](#directives)
-  - [expressions](#expressions)
   - [example](#example)
 - [compiler pipeline](#compiler-pipeline)
 - [VM](#vm)
@@ -31,11 +33,11 @@
 
 ## ramble
 
-Some time ago I found a word-sized celled Forth VM on the [Silicon Valley Forth Interest Group's site](https://www.forth.org/) and was baffled by the binary-only F# compiler that came with it. It didn't work for me, the whole thing was an old tar snapshot with memory dumps, I spent an embarrassing amount of time trying to make it work, but it just ended up easier to take the model and rewrite it. There were some sidetracks along the way — I spent some time thinking about memory footprint because (I thought) a lot of space was wasted in the bytecode, everything word-sized even where it didn't need to be. At that point I was thinking of compile mode as a special thing, effective and space-efficient, where interpreted and compiled would have been two different ways of looking at the same memory — but interpreted mode would have needed to live entirely in memory, I got really confused about what that even meant in practice and started from scratch. I wrote two Forth interpreters after that: the first time realizing mid-way that I needed a return stack, and the second time — with a return stack — being unsatisfied with the fact that I could just make it a VM and drop the interpreter part completely. It can be this clean, I thought. I guess this is the curse of implementing Forth systems (but at least the cost of re-inventing is minimal timewise, compared to anything else). The goal was now to make the dictionary in pure threaded code, and finding the smallest subset of operations that enables bigger abstractions to be built on top of them. Make everything threaded! 
+Some time ago I found a word-sized celled Forth VM on the [Silicon Valley Forth Interest Group's site](https://www.forth.org/) and was baffled by the binary-only F# compiler that came with it. It didn't work for me, the whole thing was an old tar snapshot with memory dumps, I spent an embarrassing amount of time trying to make it work, but it just ended up easier to take the model and rewrite it. There were some sidetracks along the way: I spent some time thinking about memory footprint because (I thought) a lot of space was wasted in the bytecode, everything word-sized even where it didn't need to be. At that point I was thinking of compile mode as a special thing, effective and space-efficient, where interpreted and compiled would have been two different ways of looking at the same memory, but interpreted mode would have needed to live entirely in memory, I got really confused about what that even meant in practice and started from scratch. I wrote two Forth interpreters after that: the first time realizing mid-way that I needed a return stack, and the second time (with a return stack) being unsatisfied with the fact that I could just make it a VM and drop the interpreter part completely. It can be this clean, I thought. I guess this is the curse of implementing Forth systems (but at least the cost of re-inventing is minimal timewise, compared to anything else). The goal was now to make the dictionary in pure threaded code, and finding the smallest subset of operations that enables bigger abstractions to be built on top of them. Make everything threaded! 
 
-This is where Prolog comes in, just like in one of my previous/ongoing projects — a [PDP-11/40 emulator](https://github.com/no382001/pdp-11-40-emulator) — where the pattern was the same: the emulator loops reading bytes from a stdin pipe, and a Prolog pipeline takes a list of atoms representing primitive instructions, encodes them, and pushes them down the pipe. Lists in Prolog make this kind of thing really easy to work with, and later when the compiler grows, pattern matching and DCGs make parsing and AST transformations trivial. Coming from the BCPL-like language I had there, I tried a C-like macro pasting approach to paper over the non-existence of named words at the bytecode level — which made everything even more confusing, and on top of that the postfix notation was catching up to me. When you take some weeks off and come back it can be baffling. I'm more of an s-expressions guy anyway, so I wrote a frontend for that instead.
+This is where Prolog comes in, just like in one of my previous/ongoing projects, a [PDP-11/40 emulator](https://github.com/no382001/pdp-11-40-emulator), where the pattern was the same: the emulator loops reading bytes from a stdin pipe, and a Prolog pipeline takes a list of atoms representing primitive instructions, encodes them, and pushes them down the pipe. Lists in Prolog make this kind of thing really easy to work with, and later when the compiler grows, pattern matching and DCGs make parsing and AST transformations trivial. Coming from the BCPL-like language I had there, I tried a C-like macro pasting approach to paper over the non-existence of named words at the bytecode level, which made everything even more confusing, and on top of that the postfix notation was catching up to me. When you take some weeks off and come back it can be baffling. I'm more of an s-expressions guy anyway, so I wrote a frontend for that instead.
 
-Around the same time I remembered something I tried with my Scheme interpreter — I wanted to write an MCE (metacircular evaluator) that enabled some sort of typed Scheme, never got to it, got stuck on some combination of macros and semiquoting (made me drop the project). This felt like the right moment to try again. Type inference works as stack effect inference basically — Sets functions can only leave one value on the stack (or void), not two or more, just to keep things simple. While the compiler is catching type errors it can also infer `det`/`semidet`/`nondet` the same way and do const folding on top.
+Around the same time I remembered something I tried with my Scheme interpreter: I wanted to write an MCE (metacircular evaluator) that enabled some sort of typed Scheme, never got to it, got stuck on some combination of macros and semiquoting (made me drop the project). This felt like the right moment to try again. Type inference works as stack effect inference basically: Sets functions can only leave one value on the stack (or void), not two or more, just to keep things simple. While the compiler is catching type errors it can also infer `det`/`semidet`/`nondet` the same way and do const folding on top.
 
 Sets does betray the Forth philosophy to some degree, though the type system and effect inference help keep kernel development in check. The Forth written in Sets and targeting the Forth VM is free to be as Forth as it wants, as long as it keeps to the memory boundaries the REPL sets behind it.
 
@@ -53,7 +55,7 @@ Requires: C++20 compiler, [Scryer Prolog](https://github.com/mthom/scryer-prolog
 ./run programs/echo.sets
 ```
 
-`examples/forth/forth.sets` is a Forth interpreter written in sets and compiled to slab bytecode. It implements a small Forth kernel on top of the VM, giving you a second layer to write programs in Forth syntax — split across `forth.sets` (entry point), `reader.sets` (strings/dictionary/stack/tokenizer/number parsing), `primitives.sets` (Forth words), and `compile.sets` (word dispatch). `./mandelbrot` compiles `forth.sets`, loads `examples/forth/mandelbrot.fth` into it, and runs. Shared library code (`byte-ref`/`byte-set!`, ASCII constants, catch/throw) lives in `lib/`.
+`examples/forth/forth.sets` is a Forth interpreter written in sets and compiled to slab bytecode. It implements a small Forth kernel on top of the VM, giving you a second layer to write programs in Forth syntax, split across `forth.sets` (entry point), `reader.sets` (strings/dictionary/stack/tokenizer/number parsing), `primitives.sets` (Forth words), and `compile.sets` (word dispatch). `./mandelbrot` compiles `forth.sets`, loads `examples/forth/mandelbrot.fth` into it, and runs. Shared library code (`byte-ref`/`byte-set!`, ASCII constants, catch/throw) lives in `lib/`.
 
 ## test
 
@@ -86,8 +88,9 @@ directive  = '(' '$include' string ')'
            | '(' '$section' number ')'
            | '(' '$alloc' symbol number ')' ;
 
-params     = '(' param* ')' ;
-param      = symbol | '(' symbol ':' type ')' | '(' symbol ':' type '...' ')' ;
+params     = '(' param* rest-param? ')' ;
+param      = symbol | '(' symbol ':' type ')' ;
+rest-param = '(' symbol ':' type '...' ')' ;
 param-types = '(' type* ')' ;
 level      = 'det' | 'semidet' | 'nondet' ;
 effect     = '[' level ']' | '[' level 'inline' ']' | '[' 'inline' level ']' ;
@@ -96,7 +99,7 @@ type       = 'int' | 'byte' | 'bool' | 'void' | '(' 'ptr' type ')' ;
 
 expr       = number | string | symbol
            | '(' 'if' expr expr expr ')'
-           | '(' 'case' expr case-clause+ else-clause ')'
+           | '(' 'case' expr case-clause* else-clause ')'
            | '(' 'let' '(' binding* ')' expr+ ')'
            | '(' 'local' '(' binding* ')' expr+ ')'
            | '(' 'do' expr+ ')'
@@ -109,7 +112,12 @@ expr       = number | string | symbol
            | '(' 'execute' expr ')'
            | '(' binop expr expr ')'
            | '(' symbol expr* ')'
-           | '{' symbol* '}' ;
+           | '{' symbol* '}'
+           | meta ;
+
+meta       = '(' ( '$vm-sp' | '$vm-rp' | '$vm-ip' | '$mem' | '$cell'
+                 | '$stack-size' | '$ds-start' | '$rs-start' ) ')'
+           | '(' '$op' symbol ')' ;
 
 binding    = '(' symbol expr ')' ;
 case-clause = '(' expr expr ')' ;
@@ -130,29 +138,27 @@ Comments start with `;` and run to end of line.
 | `(ptr T)` | pointer to T |
 
 > Sizes depend on the VM configuration. To change them, edit `src/vm.h`:
-> - `cell_t` — the native cell type; determines the width of `int` and `(ptr T)` (default: `int16_t`)
-> - `MEMORY_SIZE` — total address space in bytes (default: `0xFFFF`)
-> - `STACK_SIZE` — max depth of each stack in cells (default: `256`)
+> - `cell_t`: the native cell type; determines the width of `int` and `(ptr T)` (default: `int16_t`)
+> - `MEMORY_SIZE`: total address space in bytes (default: `0xFFFF`)
+> - `STACK_SIZE`: max depth of each stack in cells (default: `256`)
 
-### effect annotations
+### effect inference
 
-Every function sits at one level of a three-level hierarchy:
+The compiler infers an effect for every function, one of three levels:
 
 ```
 det  <  semidet  <  nondet
 ```
 
-The names come from Prolog's solution determinism, but the meaning here is about predictability of effect:
+The names have nothing to do with Prolog's determinism. Here they only say what a function touches:
 
-**`[det]`** — pure. The result depends only on the arguments. No memory access, no side effects. Given the same inputs you always get the same output, so the compiler can fold calls at compile time.
+**`[det]`**: only works on the stack. Its result is fully determined by its stack effect (the values it takes, the one it leaves), so with constant arguments the call can be evaluated statically and folded at compile time.
 
-**`[semidet]`** — reads or writes memory, but no I/O. Memory is *semi*-deterministic in the sense that it behaves predictably given a known state — a read always returns what was last written there, a write always takes effect. There is no blocking, no external influence. The function is deterministic conditioned on the flat address space; you just can't reduce it away at compile time because the memory state isn't known statically.
+**`[semidet]`**: also reads or writes memory, but does no I/O. The stack effect no longer determines the result, because the memory state isn't known statically.
 
-Write-only, non-blocking I/O sits in a structural gray area: `emit` always takes effect, never blocks, and returns nothing unpredictable — the same properties that define a memory write. The difference is that its effect escapes the address space, so it cannot be analyzed locally. It still belongs in `[nondet]`.
+**`[nondet]`**: does I/O (`key`, `emit`, traps). Anything that reaches outside the address space ends up here, even write-only output like `emit`.
 
-**`[nondet]`** — performs I/O or otherwise escapes. Non-determinism has two faces: the *value* returned (a `key` call gives back whatever the user types, a file read depends on disk state) and the *duration* before control returns (a read may block indefinitely). Either dimension alone is enough to force `[nondet]`. Write-only I/O like `emit` has no unpredictable return value and does not block, but it still escapes — its effects are invisible to local analysis and cannot be reordered or eliminated. Anything that touches the outside world belongs here.
-
-The hierarchy is a claim about the worst thing a function does. It propagates upward: calling a `[semidet]` function makes the caller at least `[semidet]`; calling a `[nondet]` function forces `[nondet]` all the way up. The compiler infers the actual effect and errors if the declared annotation is stricter than the body warrants. Omitting the annotation on a `det`-eligible function produces a warning.
+A function's effect is the worst effect in its body, so it propagates to callers: calling a `[semidet]` function makes the caller at least `[semidet]`, calling a `[nondet]` one makes it `[nondet]`. The annotation is optional and only checked against the inferred effect: the compiler errors if it is stricter than the body, and warns if it is looser or if a `det` function has none.
 
 ### built-in primitives
 
@@ -167,7 +173,7 @@ Inline VM opcodes can be emitted directly with `{...}`, bypassing the type syste
 
 ### directives
 
-Directives are compile-time only — they emit no code.
+Directives are compile-time only, they emit no code.
 
 | directive | description |
 |-----------|-------------|
@@ -176,87 +182,82 @@ Directives are compile-time only — they emit no code.
 | `($alloc name size)` | binds `name` to the current cursor as an `int` constant, then advances the cursor by `size` bytes |
 | `($vm-sp)` / `($vm-rp)` / `($vm-ip)` | expand to the memory address of the VM's SP/RP/IP register (memory-mapped, see [memory model](#memory-model)) |
 | `($op name)` | expands to an opcode's numeric code (from `gen/gen.pl`), for use inside `{...}` inline asm |
-
-### expressions
-
-**`(case scrutinee (val expr) ... (else expr))`** — compares `scrutinee` against each `val` in turn and evaluates the matching branch, falling back to `else` if none match. `scrutinee` is evaluated exactly once regardless of clause count. Pure sugar: desugars at parse time into a `let` binding the scrutinee once and a chain of `if`/`=` comparisons, so it costs nothing beyond what the equivalent hand-written `if` chain would.
-
-**`(let ((x expr) ...) body...)`** — binds names to values for the duration of `body`. Each binding is stored at a statically-assigned memory address allocated per-function starting at `0x4000`. No allocation occurs at runtime; the addresses are fixed at compile time.
-
-**`(local ((x expr) ...) body...)`** — like `let`, but each binding is a statically-allocated memory cell (a fixed address, like `$alloc`) instead of a rack-scoped slot. Cheaper when a `let`'s rack lifecycle isn't needed, but the storage is shared across calls — not safe for recursive or re-entrant use.
-
-**`(addr name)`** — pushes the address of a named function as an integer, without calling it. Used to pass functions as values.
-
-**`(execute expr)`** — evaluates `expr` to get a function address, then calls it as an indirect call. Combined with `addr`, this is the only form of indirect dispatch.
-
-**String literals** — a string `"hello"` compiles to a `branch` over its bytes, which are embedded inline in the code segment as null-terminated bytes, followed by a `lit` of the string's start address. Strings are read-only and live in the code region.
+| `($mem)` / `($cell)` / `($stack-size)` | expand to `MEMORY_SIZE`, `CELL_SIZE` and `STACK_SIZE` |
+| `($ds-start)` / `($rs-start)` | expand to the start address of the data / return stack |
 
 ### example
 
+`programs/echo.sets`:
+
 ```lisp
 ($section 1022)
-($alloc STRI  2)
-($alloc CHAR  2)
-($alloc IDX   2)
 ($alloc BUF 256)
 
-($include "core.sets") ; definitions for `true` and `false`
+($include "../lib/core.sets") ; true/false, byte-ref, byte-set!
 
-(def streq ((a : int) (b : int)) : bool
-  (! STRI 0)
-  (while (if (= (c@ (+ a (@ STRI))) (c@ (+ b (@ STRI))))
-             (!= (c@ (+ a (@ STRI))) 0)
-             false)
-    (! STRI (+ (@ STRI) 1)))
-  (= (c@ (+ a (@ STRI))) (c@ (+ b (@ STRI)))))
+(def streq ((a : (ptr byte)) (b : (ptr byte))) : bool [semidet]
+  (local ((i 0))
+    (while (and (= (byte-ref a i) (byte-ref b i))
+                (!= (byte-ref a i) 0))
+      (! i (+ (@ i) 1)))
+    (= (byte-ref a i) (byte-ref b i))))
 
-(def main () : void
+; read a line into BUF, null-terminated
+(def read-line () : void [nondet]
+  (local ((i 0) (c (key)))
+    (while (!= (@ c) 10)
+      (byte-set! BUF i (@ c))
+      (! i (+ (@ i) 1))
+      (! c (key)))
+    (byte-set! BUF i 0)))
+
+; print a null-terminated string, then a newline
+(def print-line ((s : (ptr byte))) : void [nondet]
+  (local ((i 0))
+    (while (!= (byte-ref s i) 0)
+      (emit (byte-ref s i))
+      (! i (+ (@ i) 1)))
+    (emit 10)))
+
+(def main () : void [nondet]
   (while true
-    (! IDX 0)
-    (while (do (! CHAR (key))
-               (!= (@ CHAR) 10))
-      (c! (+ BUF (@ IDX)) (@ CHAR))
-      (! IDX (+ (@ IDX) 1)))
-    (c! (+ BUF (@ IDX)) 0)
+    (read-line)
     (if (streq BUF "bye")
       (bye)
-      (do (! IDX 0)
-          (while (!= (c@ (+ BUF (@ IDX))) 0)
-            (emit (c@ (+ BUF (@ IDX))))
-            (! IDX (+ (@ IDX) 1)))
-          (emit 10)))))
+      (print-line BUF))))
 ```
 
 Memory layout of the above program at runtime (default config):
 
 ```
-; $section 1022 sets the cursor; each $alloc advances it
+; $section 1022 sets the cursor; $alloc advances it, then each local takes the next cell
 
- addr  0        ~N    1022  1024  1026  1028            1283
-       ┌────────┬─────┬─────┬─────┬─────┬───────────────┐
-       │ code   │     │STRI │CHAR │ IDX │      BUF      │ ...
-       └────────┴─────┴─────┴─────┴─────┴───────────────┘
-                       <-2-> <-2-> <-2-> <---256 bytes--->
+ addr  0        ~N    1022            1278  1280  1282  1284
+       +--------+-----+---------------+-----+-----+-----+-----+
+       |  code  |     |      BUF      |  i  |  i  |  c  |  i  | ...
+       +--------+-----+---------------+-----+-----+-----+-----+
+                       <--256 bytes--> streq  read-line  print-line
 
 ; "bye" string literal is inlined in the code region (branch over + bytes + lit addr)
 
-; let/param slots are statically assigned per-function starting at 0x4000
+; param slots are statically assigned per-function, in definition order, starting at 0x4000
+; (let bindings live on the return stack instead)
 
- addr  16384  16386   16404
-       ┌──────┬───────┬────────── ...
-       │  a   │   b   │  main slots
-       │      streq   │
-       └──────┴───────┴────────── ...
+ addr  16384  16386  16388
+       +------+------+------------+
+       |  a   |  b   |     s      |
+       |    streq    | print-line |
+       +------+------+------------+
 
 ; stacks and registers occupy the top of address space
 ; (with MEMORY_SIZE=65535, STACK_SIZE=256, CELL_SIZE=2)
 ; DS_START = 64511, RS_START = 65023
 
- addr  64505   64511          65023          65535
-       ┌───────┬──────────────┬──────────────┐
-       │ regs  │   dstack     │   rstack     │
-       │SP RP IP│  512 B      │   512 B      │
-       └───────┴──────────────┴──────────────┘
+ addr  64505    64511          65023          65535
+       +--------+--------------+--------------+
+       | regs   |   dstack     |   rstack     |
+       |SP RP IP|    512 B     |    512 B     |
+       +--------+--------------+--------------+
 ```
 
 ## compiler pipeline
@@ -288,9 +289,9 @@ Flat byte-addressable memory. Programs are loaded at address 0 and grow upward. 
 
 ```
 0                                                           MEMORY_SIZE
-┌─────────────────────────────────┬───────┬──────────┬──────────┐
-│ program + heap (grows ->)       │ regs  │  dstack  │  rstack  │
-└─────────────────────────────────┴───────┴──────────┴──────────┘
++---------------------------------+-------+----------+----------+
+| program + heap (grows ->)       | regs  |  dstack  |  rstack  |
++---------------------------------+-------+----------+----------+
                                   DS_START-n DS_START  RS_START
 ```
 
